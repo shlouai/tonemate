@@ -23,7 +23,9 @@ window.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") {
       e.preventDefault();
       const text = input.value.trim();
-      if (text) await invoke("submit", { text });
+      // Fire and forget: the translation takes a second or two, and the bar
+      // should disappear the moment Enter lands.
+      if (text) void invoke("submit", { text }).catch(console.error);
       input.value = "";
       await appWindow.hide();
     } else if (e.key === "Escape") {

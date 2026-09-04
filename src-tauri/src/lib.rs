@@ -1,10 +1,17 @@
+pub mod bedrock;
+
 use tauri::{Manager, WebviewWindow};
 
-/// Print whatever was typed. Stand-in for the real action, so the demo can
-/// prove the roundtrip webview -> Rust works while the window is floating.
+/// Translate what was typed and print both sides to the terminal. The frontend
+/// doesn't await this, so the bar can hide the instant Enter is pressed while
+/// the model call finishes in the background.
 #[tauri::command]
-fn submit(text: String) {
-    println!("[tonemate] submit: {text}");
+async fn submit(text: String) {
+    println!("[tonemate] in : {text}");
+    match bedrock::translate(&text).await {
+        Ok(translated) => println!("[tonemate] out: {translated}"),
+        Err(err) => eprintln!("[tonemate] translate failed: {err}"),
+    }
 }
 
 /// Show + focus, or hide. `is_visible` is the source of truth: the window
