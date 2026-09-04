@@ -9,7 +9,10 @@ use std::collections::HashMap;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_bedrockruntime::{
     error::DisplayErrorContext,
-    types::{ContentBlock, ConversationRole, InferenceConfiguration, Message, SystemContentBlock},
+    types::{
+        ContentBlock, ConversationRole, ConverseStreamOutput, InferenceConfiguration, Message,
+        SystemContentBlock,
+    },
     Client,
 };
 use aws_smithy_types::Document;
@@ -64,7 +67,14 @@ async fn client() -> &'static Client {
         .await
 }
 
-pub async fn translate(text: &str) -> Result<String, String> {
+/// One streamed Converse call. Returns everything the model said; `on_delta`
+/// sees each text fragment as it lands, so callers can show the translation
+/// forming instead of waiting for the full response.
+async fn converse(
+    text: &str,
+    max_tokens: i32,
+    mut on_delta: impl FnMut(&str),
+) -> Result<(String, Option<String>), String> {
     let user_turn = Message::builder()
         .role(ConversationRole::User)
         .content(ContentBlock::Text(text.to_string()))
@@ -73,11 +83,11 @@ pub async fn translate(text: &str) -> Result<String, String> {
 
     let mut request = client()
         .await
-        .converse()
+        .converse_stream()
         .model_id(env_or("TONEMATE_MODEL", DEFAULT_MODEL))
         .system(SystemContentBlock::Text(SYSTEM_PROMPT.to_string()))
         .messages(user_turn)
-        .inference_config(InferenceConfiguration::builder().max_tokens(2048).build());
+        .inference_config(InferenceConfiguration::builder().max_tokens(max_tokens).build());
 
     if let Some(effort) = effort() {
         request = request.additional_model_request_fields(Document::Object(HashMap::from([(
@@ -92,30 +102,55 @@ pub async fn translate(text: &str) -> Result<String, String> {
     // Bedrock's own message ("The provided model identifier is invalid.") is the
     // useful part; `DisplayErrorContext` is the fallback for transport-level
     // failures, where there is no service message to read.
-    let response = request.send().await.map_err(|err| {
+    let mut response = request.send().await.map_err(|err| {
         err.as_service_error()
             .and_then(|service_err| service_err.meta().message())
             .map(str::to_string)
             .unwrap_or_else(|| DisplayErrorContext(&err).to_string())
     })?;
 
-    let message = response
-        .output()
-        .ok_or("bedrock returned no output")?
-        .as_message()
-        .map_err(|_| "bedrock returned a non-message output")?;
+    let mut collected = String::new();
+    let mut stop_reason = None;
 
-    let translated = message
-        .content()
-        .iter()
-        .filter_map(|block| block.as_text().ok())
-        .map(String::as_str)
-        .collect::<String>();
+    loop {
+        match response.stream.recv().await {
+            Ok(Some(ConverseStreamOutput::ContentBlockDelta(event))) => {
+                // `as_text` also filters out reasoning deltas, which adaptive
+                // thinking emits alongside the answer.
+                if let Some(fragment) = event.delta().and_then(|delta| delta.as_text().ok()) {
+                    collected.push_str(fragment);
+                    on_delta(fragment);
+                }
+            }
+            Ok(Some(ConverseStreamOutput::MessageStop(event))) => {
+                stop_reason = Some(format!("{:?}", event.stop_reason()));
+            }
+            Ok(Some(_)) => {}
+            Ok(None) => break,
+            Err(err) => return Err(DisplayErrorContext(&err).to_string()),
+        }
+    }
+
+    Ok((collected, stop_reason))
+}
+
+/// Pay the one-time costs — config load, credential resolution, and the TLS
+/// handshake to Bedrock — before the user asks for anything. Measured on a
+/// warm profile, that first request carries ~1s the later ones don't, and
+/// `max_tokens: 1` buys it for a rounding error's worth of tokens. Runs against
+/// the configured model, so a bad `TONEMATE_MODEL` surfaces at startup rather
+/// than on the first translation.
+pub async fn warm() -> Result<(), String> {
+    converse("hi", 1, |_| {}).await.map(|_| ())
+}
+
+pub async fn translate(text: &str, on_delta: impl FnMut(&str)) -> Result<String, String> {
+    let (translated, stop_reason) = converse(text, 2048, on_delta).await?;
 
     if translated.trim().is_empty() {
         return Err(format!(
-            "model returned no text (stop reason: {:?})",
-            response.stop_reason()
+            "model returned no text (stop reason: {})",
+            stop_reason.unwrap_or_else(|| "unknown".to_string())
         ));
     }
 

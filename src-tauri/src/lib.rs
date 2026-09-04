@@ -1,5 +1,7 @@
 pub mod bedrock;
 
+use std::io::Write;
+
 use tauri::{Manager, WebviewWindow};
 
 /// Translate what was typed and print both sides to the terminal. The frontend
@@ -8,9 +10,20 @@ use tauri::{Manager, WebviewWindow};
 #[tauri::command]
 async fn submit(text: String) {
     println!("[tonemate] in : {text}");
-    match bedrock::translate(&text).await {
-        Ok(translated) => println!("[tonemate] out: {translated}"),
-        Err(err) => eprintln!("[tonemate] translate failed: {err}"),
+    print!("[tonemate] out: ");
+    // stdout is line-buffered, so each fragment needs an explicit flush to
+    // actually appear as it arrives rather than all at once at the newline.
+    let _ = std::io::stdout().flush();
+
+    let result = bedrock::translate(&text, |fragment| {
+        print!("{fragment}");
+        let _ = std::io::stdout().flush();
+    })
+    .await;
+
+    println!();
+    if let Err(err) = result {
+        eprintln!("[tonemate] translate failed: {err}");
     }
 }
 
@@ -57,6 +70,16 @@ pub fn run() {
 
                 println!("[tonemate] hotkey registered: Cmd+Shift+Space");
             }
+
+            // Off the startup path: the app is usable the moment the hotkey is
+            // registered, and by the time anyone types, Bedrock is reachable.
+            tauri::async_runtime::spawn(async {
+                match bedrock::warm().await {
+                    Ok(()) => println!("[tonemate] bedrock warm"),
+                    Err(err) => eprintln!("[tonemate] bedrock warmup failed: {err}"),
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())
