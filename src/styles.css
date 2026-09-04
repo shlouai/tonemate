@@ -1,0 +1,42 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  /* Transparent so only .bar is visible — the window itself has no chrome. */
+  background: transparent;
+  overflow: hidden;
+}
+
+.bar {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  border-radius: 14px;
+  background: rgba(28, 28, 30, 0.82);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+#input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #f2f2f7;
+  font-size: 20px;
+  padding: 0 10px;
+}
+
+#input::placeholder {
+  color: rgba(242, 242, 247, 0.35);
+}
