@@ -5,23 +5,29 @@ use std::io::Write;
 
 use tauri::{Emitter, Manager, WebviewWindow};
 
-/// Translate what was typed, streaming it to both the terminal and the result
-/// box under the input. The frontend doesn't await this — it just listens for
-/// the events below, so the bar stays responsive while the model answers.
+/// Translate what was typed, streaming the renderings to both the terminal and
+/// the result box under the input. The frontend doesn't await this — it just
+/// listens for the events below, so the bar stays responsive while the model
+/// answers.
 #[tauri::command]
 async fn submit(window: WebviewWindow, text: String) {
     println!("[tonemate] in : {text}");
-    print!("[tonemate] out: ");
+    // The renderings arrive on lines of their own, so the label gets its own
+    // line too rather than sitting in front of the first one.
+    println!("[tonemate] out:");
     // stdout is line-buffered, so each fragment needs an explicit flush to
     // actually appear as it arrives rather than all at once at the newline.
     let _ = std::io::stdout().flush();
 
     let _ = window.emit("translate:start", ());
 
+    let mut parser = tones::Parser::default();
     let result = bedrock::translate(&text, |fragment| {
         print!("{fragment}");
         let _ = std::io::stdout().flush();
-        let _ = window.emit("translate:delta", fragment);
+        for tone in parser.push(fragment) {
+            let _ = window.emit("translate:tone", tone);
+        }
     })
     .await;
 
@@ -29,8 +35,13 @@ async fn submit(window: WebviewWindow, text: String) {
     match result {
         // The frontend needs the end of the stream, not just its fragments: a
         // response that streams nothing would otherwise leave the loading
-        // placeholder up forever.
+        // placeholder up forever. `finish` comes first because the model
+        // usually omits the trailing newline, so the last rendering is still
+        // sitting in the parser at this point.
         Ok(_) => {
+            for tone in parser.finish() {
+                let _ = window.emit("translate:tone", tone);
+            }
             let _ = window.emit("translate:done", ());
         }
         Err(err) => {
