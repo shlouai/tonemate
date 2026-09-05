@@ -44,7 +44,6 @@ struct ApiError {
 }
 
 #[derive(Default)]
-#[allow(dead_code)]
 pub struct Decoder {
     /// The line still arriving, up to but not including its newline.
     pending: Vec<u8>,
@@ -64,7 +63,6 @@ impl Decoder {
     ///
     /// `Err` means the provider reported a failure mid-stream, which ends the
     /// translation: half a set of renderings cannot be told from a whole one.
-    #[allow(dead_code)]
     pub fn push(&mut self, chunk: &[u8]) -> Result<Vec<String>, String> {
         self.pending.extend_from_slice(chunk);
         let mut fragments = Vec::new();
@@ -81,12 +79,10 @@ impl Decoder {
         Ok(fragments)
     }
 
-    #[allow(dead_code)]
     pub fn finish_reason(&self) -> Option<&str> {
         self.finish_reason.as_deref()
     }
 
-    #[allow(dead_code)]
     pub fn saw_reasoning(&self) -> bool {
         self.saw_reasoning
     }

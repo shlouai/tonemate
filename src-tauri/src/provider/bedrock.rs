@@ -125,5 +125,12 @@ pub(super) async fn converse(
         }
     }
 
+    if collected.trim().is_empty() {
+        return Err(format!(
+            "model returned no text (stop reason: {})",
+            stop_reason.unwrap_or_else(|| "unknown".to_string())
+        ));
+    }
+
     Ok((collected, stop_reason))
 }

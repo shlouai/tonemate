@@ -5,6 +5,7 @@
 //! drift would look like a model difference.
 
 pub mod bedrock;
+pub mod openai_compat;
 mod sse;
 
 use tauri::AppHandle;
@@ -36,25 +37,52 @@ pub(crate) const SYSTEM_PROMPT: &str = "You are a translation engine. If the use
 /// one translation needed.
 const MAX_TOKENS: i32 = 4096;
 
+/// The domestic host. A key issued for the international one
+/// (`https://api.moonshot.ai/v1`) returns `401 Invalid Authentication` here and
+/// vice versa, and the key string does not say which it is — hence the override.
+const KIMI_BASE_URL: &str = "https://api.moonshot.cn/v1";
+
+/// `kimi-k2.6` is the only Kimi model whose reasoning can be switched off;
+/// `kimi-k2.7-code` forces it on, which spends the whole budget deliberating
+/// and returns no translation.
+const KIMI_MODEL: &str = "kimi-k2.6";
+
 /// The service a translation goes through. An enum rather than a trait: the set
 /// is fixed at compile time and picked by a `match`, so the boxing and lifetime
 /// work an `async` trait method would need buys nothing.
 pub enum Provider {
     Bedrock,
+    Kimi(String),
 }
 
 impl Provider {
     /// What the user chose, or Bedrock when they chose nothing usable. Read per
     /// call rather than cached, so a change in the settings window takes effect
     /// on the next translation rather than the next launch.
-    pub fn from_settings(_app: &AppHandle) -> Self {
-        Provider::Bedrock
+    ///
+    /// A provider selected without a key falls back rather than failing: an
+    /// empty key means "not configured yet", which is not the same as a key the
+    /// service rejected.
+    pub fn from_settings(app: &AppHandle) -> Self {
+        match crate::settings::provider_name(app).as_str() {
+            "kimi" => match crate::settings::kimi_api_key(app) {
+                key if key.is_empty() => {
+                    println!("[tonemate] kimi selected but no api key set; using bedrock");
+                    Provider::Bedrock
+                }
+                key => Provider::Kimi(key),
+            },
+            _ => Provider::Bedrock,
+        }
     }
 
     /// The provider `examples/translate.rs` should use. It has no `AppHandle`,
     /// so it configures itself from the environment instead of from settings.
     pub fn from_env() -> Self {
-        Provider::Bedrock
+        match std::env::var("TONEMATE_KIMI_API_KEY") {
+            Ok(key) if !key.is_empty() => Provider::Kimi(key),
+            _ => Provider::Bedrock,
+        }
     }
 
     /// Names the service in a log line or an error message. With more than one
@@ -62,6 +90,22 @@ impl Provider {
     pub fn label(&self) -> &'static str {
         match self {
             Provider::Bedrock => "bedrock",
+            Provider::Kimi(_) => "kimi",
+        }
+    }
+
+    /// Where a Kimi request goes and what it asks for.
+    ///
+    /// `thinking: disabled` is not optional. Left on, reasoning tokens come out
+    /// of the same budget as the answer: measured at 21.6s for 1023 reasoning
+    /// frames, zero content frames and `finish_reason: length` — twenty-one
+    /// seconds for no translation at all.
+    fn kimi_endpoint(key: &str) -> openai_compat::Endpoint {
+        openai_compat::Endpoint {
+            base_url: env_or("TONEMATE_KIMI_BASE_URL", KIMI_BASE_URL),
+            model: env_or("TONEMATE_KIMI_MODEL", KIMI_MODEL),
+            api_key: key.to_string(),
+            extra: serde_json::json!({ "thinking": { "type": "disabled" } }),
         }
     }
 }
@@ -80,11 +124,27 @@ pub(crate) fn env_or(key: &str, fallback: &str) -> String {
 /// against the configured model, so a bad model id surfaces at startup rather
 /// than on the first translation.
 pub async fn warm(provider: &Provider) -> Result<(), String> {
-    match provider {
-        Provider::Bedrock => bedrock::converse(SYSTEM_PROMPT, "hi", 1, |_| {})
-            .await
-            .map(|_| ()),
-    }
+    let result = match provider {
+        Provider::Bedrock => match bedrock::converse(SYSTEM_PROMPT, "hi", 1, |_| {}).await {
+            Ok(_) => Ok(()),
+            Err(err) if err.starts_with("model returned no text") => Ok(()),
+            Err(err) => Err(err),
+        },
+        // A one-token budget makes the answer empty by construction, which the
+        // transport would otherwise call a failure. Only reachability is being
+        // tested here, so that error is the success case.
+        Provider::Kimi(key) => {
+            match openai_compat::converse(&Provider::kimi_endpoint(key), SYSTEM_PROMPT, "hi", 1, |_| {})
+                .await
+            {
+                Ok(_) => Ok(()),
+                Err(err) if err.starts_with("model returned no text") => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
+    };
+
+    result.map_err(|err| format!("{}: {err}", provider.label()))
 }
 
 pub async fn translate(
@@ -92,16 +152,21 @@ pub async fn translate(
     text: &str,
     on_delta: impl FnMut(&str),
 ) -> Result<(), String> {
-    let (translated, stop_reason) = match provider {
-        Provider::Bedrock => bedrock::converse(SYSTEM_PROMPT, text, MAX_TOKENS, on_delta).await?,
+    let result = match provider {
+        Provider::Bedrock => bedrock::converse(SYSTEM_PROMPT, text, MAX_TOKENS, on_delta).await,
+        Provider::Kimi(key) => {
+            openai_compat::converse(
+                &Provider::kimi_endpoint(key),
+                SYSTEM_PROMPT,
+                text,
+                MAX_TOKENS as u32,
+                on_delta,
+            )
+            .await
+        }
     };
 
-    if translated.trim().is_empty() {
-        return Err(format!(
-            "model returned no text (stop reason: {})",
-            stop_reason.unwrap_or_else(|| "unknown".to_string())
-        ));
-    }
-
-    Ok(())
+    // Prefixed here rather than in each transport, so every provider's failures
+    // read the same way in the bar and in the log.
+    result.map(|_| ()).map_err(|err| format!("{}: {err}", provider.label()))
 }
