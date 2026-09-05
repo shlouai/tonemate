@@ -1,4 +1,5 @@
 pub mod bedrock;
+pub mod tones;
 
 use std::io::Write;
 
