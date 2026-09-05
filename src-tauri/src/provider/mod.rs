@@ -70,7 +70,11 @@ fn choose(provider: &str, kimi_key: &str) -> Provider {
             Provider::Bedrock
         }
         "kimi" => Provider::Kimi(kimi_key.to_string()),
-        _ => Provider::Bedrock,
+        "bedrock" => Provider::Bedrock,
+        _ => {
+            println!("[tonemate] unrecognised provider \"{provider}\"; using bedrock");
+            Provider::Bedrock
+        }
     }
 }
 
@@ -187,7 +191,9 @@ pub async fn translate(
 
     // Prefixed here rather than in each transport, so every provider's failures
     // read the same way in the bar and in the log.
-    result.map(|_| ()).map_err(|err| format!("{}: {err}", provider.label()))
+    result
+        .map(|_| ())
+        .map_err(|err| format!("{}: {err}", provider.label()))
 }
 
 #[cfg(test)]

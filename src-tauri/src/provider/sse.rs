@@ -145,7 +145,9 @@ mod tests {
     }
 
     fn frame(delta: &str) -> String {
-        format!("data: {{\"choices\":[{{\"index\":0,\"delta\":{delta},\"finish_reason\":null}}]}}\n\n")
+        format!(
+            "data: {{\"choices\":[{{\"index\":0,\"delta\":{delta},\"finish_reason\":null}}]}}\n\n"
+        )
     }
 
     #[test]
@@ -220,14 +222,18 @@ mod tests {
 
     #[test]
     fn carriage_returns_and_blank_lines_are_tolerated() {
-        let stream = "\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\r\n\r\ndata: [DONE]\r\n\r\n";
+        let stream =
+            "\r\ndata: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\r\n\r\ndata: [DONE]\r\n\r\n";
         assert_eq!(feed(&[stream]).unwrap(), vec!["a"]);
     }
 
     /// Named events and comment lines belong to the SSE framing, not to us.
     #[test]
     fn non_data_lines_are_ignored() {
-        let stream = format!(": keep-alive\nevent: message\n{}", frame(r#"{"content":"a"}"#));
+        let stream = format!(
+            ": keep-alive\nevent: message\n{}",
+            frame(r#"{"content":"a"}"#)
+        );
         assert_eq!(feed(&[&stream]).unwrap(), vec!["a"]);
     }
 
@@ -269,7 +275,8 @@ mod tests {
     #[test]
     fn the_finish_reason_is_captured() {
         let mut decoder = Decoder::default();
-        let stream = "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n";
+        let stream =
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n";
         decoder.push(stream.as_bytes()).unwrap();
         assert_eq!(decoder.finish_reason(), Some("length"));
     }
@@ -284,7 +291,10 @@ mod tests {
             "{}data: {{\"choices\":[{{\"delta\":{{}},\"finish_reason\":\"length\"}}]}}\n\n",
             frame(r#"{"reasoning_content":"thinking..."}"#)
         );
-        assert_eq!(decoder.push(stream.as_bytes()).unwrap(), Vec::<String>::new());
+        assert_eq!(
+            decoder.push(stream.as_bytes()).unwrap(),
+            Vec::<String>::new()
+        );
         assert!(decoder.saw_reasoning());
         assert_eq!(decoder.finish_reason(), Some("length"));
     }

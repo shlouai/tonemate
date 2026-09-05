@@ -219,11 +219,7 @@ mod tests {
         let updates = parser.push("a\tA\nb\tB\nc\tC");
         assert_eq!(
             updates,
-            vec![
-                tone(0, "a", "A"),
-                tone(1, "b", "B"),
-                tone(2, "c", "C"),
-            ]
+            vec![tone(0, "a", "A"), tone(1, "b", "B"), tone(2, "c", "C"),]
         );
     }
 
@@ -232,11 +228,7 @@ mod tests {
     /// changes for that index.
     #[test]
     fn labels_are_stable_per_index() {
-        let cases = [
-            "直译\tA\n正式\tB",
-            "\tA\nB\n直译\tC",
-            "  \t  \n直译\tX",
-        ];
+        let cases = ["直译\tA\n正式\tB", "\tA\nB\n直译\tC", "  \t  \n直译\tX"];
 
         for input in cases {
             let chars: Vec<String> = input.chars().map(|c| c.to_string()).collect();

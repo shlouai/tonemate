@@ -81,7 +81,11 @@ pub(super) async fn converse(
         .model_id(env_or("TONEMATE_MODEL", DEFAULT_MODEL))
         .system(SystemContentBlock::Text(system_prompt.to_string()))
         .messages(user_turn)
-        .inference_config(InferenceConfiguration::builder().max_tokens(max_tokens).build());
+        .inference_config(
+            InferenceConfiguration::builder()
+                .max_tokens(max_tokens)
+                .build(),
+        );
 
     if let Some(effort) = effort() {
         request = request.additional_model_request_fields(Document::Object(HashMap::from([(
