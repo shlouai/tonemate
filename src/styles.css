@@ -18,6 +18,9 @@ body {
    window's initial 60px — 42px row + 16px padding + 2px border. */
 .bar {
   box-sizing: border-box;
+  /* The anchor for #toast, which has to overlay the bar instead of sitting in
+     it. */
+  position: relative;
   padding: 8px;
   display: flex;
   flex-direction: column;
@@ -39,20 +42,24 @@ body {
    must not move anything that was already on screen. */
 #loading,
 #output {
-  margin: 6px 10px 2px;
+  /* Held 6px wider than the text inside it, so a hovered row can be highlighted
+     to an edge that isn't the text's own. The 6px is given back as padding on
+     .tone and on #loading, which leaves the text exactly where it was. */
+  margin: 6px 4px 2px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* The grid is on the container rather than on each row, so the label column is
    sized by the widest label in the whole set and every translation starts at the
-   same left edge. Rows hand their two spans straight to these columns via
-   `display: contents`. */
+   same left edge. Rows borrow these two columns via `subgrid`. */
 #output {
   display: grid;
   grid-template-columns: max-content 1fr;
   column-gap: 10px;
-  row-gap: 6px;
+  /* Smaller than it looks: .tone adds 2px of its own top and bottom, so the gap
+     between two translations is still 6px. */
+  row-gap: 2px;
   /* Caps how far the window can grow; longer results scroll instead. */
   max-height: 240px;
   overflow-y: auto;
@@ -66,8 +73,30 @@ body {
   display: none;
 }
 
+/* A subgrid rather than `display: contents`, which is what this was: a row has
+   to generate a box of its own before it can be highlighted or clicked, and
+   `subgrid` is how it keeps sharing the container's label column while having
+   one. Every row carries the same padding, so shortening the columns by it
+   shortens them identically and the rows stay aligned with each other. */
 .tone {
-  display: contents;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+/* Says the row is the thing you act on, and that acting on it is one click. */
+.tone:hover {
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+/* The error row is a message, not a result — there is nothing to copy out of
+   it, so it must not offer to be copied. */
+#output.error .tone:hover {
+  background: none;
+  cursor: default;
 }
 
 /* Held against the first line of its translation rather than centred against a
@@ -116,6 +145,8 @@ body {
   gap: 6px;
   font-size: 15px;
   height: 1.45em;
+  /* Matches .tone's, so the dots sit where the first translation's label will. */
+  padding-left: 6px;
 }
 
 #loading span {
@@ -198,4 +229,32 @@ body {
 
 #input::placeholder {
   color: rgba(242, 242, 247, 0.35);
+}
+
+/* Laid over the right end of the input row — empty from the moment a translation
+   is submitted — so the confirmation never covers a result. `line-height` does
+   the centring because the element is only ever one line, and the right inset
+   matches the input's own so the text ends where the typing does. Kept out of
+   hit-testing: it sits on top of the input, and clicking it must reach the
+   input. */
+#toast {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  line-height: 42px;
+  font-size: 13px;
+  color: rgba(242, 242, 247, 0.55);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+#toast.shown {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #toast {
+    transition: none;
+  }
 }

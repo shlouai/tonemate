@@ -31,6 +31,10 @@
         <span></span><span></span><span></span>
       </div>
       <div id="output" hidden></div>
+      <!-- Floats over the empty right end of the input row rather than taking a
+           slot of its own: the window is resized to fit .bar, so anything in the
+           flow would make the whole bar jump every time you copy. -->
+      <div id="toast" role="status" aria-live="polite"></div>
     </div>
   </body>
 </html>

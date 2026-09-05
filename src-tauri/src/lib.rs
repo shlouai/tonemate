@@ -67,6 +67,10 @@ fn toggle(window: &WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Copying a rendering goes through the native pasteboard rather than
+        // `navigator.clipboard`: WebKit refuses that one outside a user gesture
+        // it recognises, and a click on a plain div isn't reliably one.
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![submit])
         .setup(|app| {
             #[cfg(desktop)]

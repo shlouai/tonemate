@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 const appWindow = getCurrentWindow();
 
@@ -16,6 +17,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const output = document.querySelector<HTMLDivElement>("#output")!;
   const loading = document.querySelector<HTMLDivElement>("#loading")!;
   const grip = document.querySelector<HTMLDivElement>("#grip")!;
+  const toast = document.querySelector<HTMLDivElement>("#toast")!;
 
   // The window is undecorated, so there is no title bar to drag it by — the grip
   // is it. Preventing the default is what keeps the caret in the input: without
@@ -59,6 +61,28 @@ window.addEventListener("DOMContentLoaded", () => {
     if (focused) focusInput();
   });
 
+  // The message is written into the element rather than only faded in, because
+  // `role="status"` announces the change in text and not the change in opacity —
+  // which is also why it is emptied a beat after the fade rather than with it.
+  let toastTimer: number | undefined;
+  const flashToast = (message: string) => {
+    clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.classList.add("shown");
+    toastTimer = window.setTimeout(() => {
+      toast.classList.remove("shown");
+      toastTimer = window.setTimeout(() => {
+        toast.textContent = "";
+      }, 200);
+    }, 1400);
+  };
+
+  const clearToast = () => {
+    clearTimeout(toastTimer);
+    toast.classList.remove("shown");
+    toast.textContent = "";
+  };
+
   // Rows are keyed by tone index because `translate:tone` carries a row's whole
   // text rather than a delta: an update is a write, not an append, so a repeated
   // event cannot corrupt a row.
@@ -68,6 +92,8 @@ window.addEventListener("DOMContentLoaded", () => {
     rows.clear();
     output.replaceChildren();
     output.classList.remove("error");
+    // The confirmation referred to a row that is about to stop existing.
+    clearToast();
   };
 
   /** Builds a row, returning the element its text goes in. */
@@ -95,6 +121,39 @@ window.addEventListener("DOMContentLoaded", () => {
     loading.hidden = true;
     syncWindowHeight();
   };
+
+  // Delegated to the container because the rows themselves are thrown away and
+  // rebuilt on every translation. Mouse-only by design: making a row focusable
+  // would give the caret somewhere to go other than the input, and keeping it in
+  // the input is the whole shape of this window.
+  output.addEventListener("click", (e) => {
+    // Nothing in an error message is worth putting on the clipboard.
+    if (output.classList.contains("error")) return;
+    const row = (e.target as HTMLElement).closest(".tone");
+    if (!row) return;
+    // A press that ends a selection is not a click on the row: the text is
+    // selectable by hand, and copying the whole row over a hand-picked fragment
+    // would throw away the more deliberate of the two.
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    // The label names the row, it isn't part of it — what gets pasted is the
+    // rendering alone.
+    const text = row.querySelector(".text")?.textContent;
+    if (!text) return;
+    // Through the native pasteboard, not `navigator.clipboard`: WebKit rejects
+    // that with NotAllowedError unless it recognises a user gesture, and a click
+    // on a plain div doesn't reliably qualify.
+    void writeText(text).then(
+      () => flashToast("已拷贝至剪切板"),
+      (err: unknown) => {
+        console.error(err);
+        flashToast("拷贝失败");
+      },
+    );
+    // Pressing a div takes the caret out of the input. Put it back — but without
+    // selecting, unlike a fresh summon, so a half-typed next query survives.
+    input.focus();
+  });
 
   // The box opens on the placeholder rather than on emptiness: there's most of a
   // second between the request going out and the first fragment coming back, and

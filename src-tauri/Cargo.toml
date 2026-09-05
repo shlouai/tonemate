@@ -25,6 +25,7 @@ aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-bedrockruntime = "1"
 aws-smithy-types = "1"
 tokio = { version = "1", features = ["sync"] }
+tauri-plugin-clipboard-manager = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-global-shortcut = "2"
