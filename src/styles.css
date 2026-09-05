@@ -13,17 +13,50 @@ body {
   overflow: hidden;
 }
 
+/* Height is content-driven: the window is resized to match it, so the bar
+   grows downwards when the result box appears. Collapsed that comes to the
+   window's initial 60px — 42px row + 16px padding + 2px border. */
 .bar {
   box-sizing: border-box;
-  height: 100%;
   padding: 8px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   border-radius: 14px;
   background: rgba(28, 28, 30, 0.82);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  height: 42px;
+}
+
+#output {
+  margin: 6px 10px 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  /* Caps how far the window can grow; longer translations scroll instead. */
+  max-height: 240px;
+  overflow-y: auto;
+  color: #f2f2f7;
+  font-size: 15px;
+  line-height: 1.45;
+  /* Keeps the model's own line breaks, and lets the text be selected and
+     copied even though this is a div rather than a real input. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  user-select: text;
+}
+
+#output[hidden] {
+  display: none;
+}
+
+#output.error {
+  color: #ff6b6b;
 }
 
 #input {

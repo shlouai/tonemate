@@ -2,28 +2,32 @@ pub mod bedrock;
 
 use std::io::Write;
 
-use tauri::{Manager, WebviewWindow};
+use tauri::{Emitter, Manager, WebviewWindow};
 
-/// Translate what was typed and print both sides to the terminal. The frontend
-/// doesn't await this, so the bar can hide the instant Enter is pressed while
-/// the model call finishes in the background.
+/// Translate what was typed, streaming it to both the terminal and the result
+/// box under the input. The frontend doesn't await this — it just listens for
+/// the events below, so the bar stays responsive while the model answers.
 #[tauri::command]
-async fn submit(text: String) {
+async fn submit(window: WebviewWindow, text: String) {
     println!("[tonemate] in : {text}");
     print!("[tonemate] out: ");
     // stdout is line-buffered, so each fragment needs an explicit flush to
     // actually appear as it arrives rather than all at once at the newline.
     let _ = std::io::stdout().flush();
 
+    let _ = window.emit("translate:start", ());
+
     let result = bedrock::translate(&text, |fragment| {
         print!("{fragment}");
         let _ = std::io::stdout().flush();
+        let _ = window.emit("translate:delta", fragment);
     })
     .await;
 
     println!();
     if let Err(err) = result {
         eprintln!("[tonemate] translate failed: {err}");
+        let _ = window.emit("translate:error", err);
     }
 }
 

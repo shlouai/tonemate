@@ -1,8 +1,8 @@
 # tonemate
 
 A Spotlight-style floating input bar: hit `Cmd+Shift+Space` anywhere, type text in
-any language, press Enter, and the English translation is printed to the terminal
-tonemate was launched from. Translation runs through Claude on Amazon Bedrock.
+any language, press Enter, and the English translation streams into a box under
+the input. Translation runs through Claude on Amazon Bedrock.
 
 ## Prerequisites
 
@@ -28,11 +28,13 @@ The window starts hidden — there is nothing to see until you summon it. Once
 | Key | Action |
 | --- | --- |
 | `Cmd+Shift+Space` | Show the bar (or hide it, if it is already up) |
-| `Enter` | Translate and hide the bar |
-| `Esc` | Hide without translating |
+| `Enter` | Translate, keeping the bar up to show the result |
+| `Esc` | Hide, clearing the result |
 
-**Keep the terminal visible.** The translation is printed there, streaming in as
-the model produces it — there is no output surface in the bar yet:
+The result box under the input is hidden until there is something to show, then
+grows the window downwards as the translation streams in. Its text can be
+selected and copied; anything longer than the box scrolls. The same exchange is
+still logged to the launching terminal:
 
 ```
 [tonemate] in : 今天天气不错，我们出去走走吧。
