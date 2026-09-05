@@ -117,10 +117,11 @@ all. Every request therefore sends:
 "thinking": { "type": "disabled" }
 ```
 
-`kimi-k2.6` is the only model that accepts `"disabled"`; `kimi-k2.7-code` forces
-reasoning on, which is why it is not an option here. `reasoning_effort: "low"` is
-accepted without error and silently ignored (1041 vs 1201 reasoning characters),
-so it is not a substitute.
+`kimi-k2.6` is the only model that accepts `"disabled"`; `kimi-k2.7-code` rejects
+`thinking: disabled` outright with `"invalid thinking: only type=enabled is
+allowed for this model"`, which is why it is not an option here.
+`reasoning_effort: "low"` is accepted without error and silently ignored (1041 vs
+1201 reasoning characters), so it is not a substitute.
 
 **`max_tokens` is deprecated; the field is `max_completion_tokens`.** Set to 4096,
 matching Bedrock.
