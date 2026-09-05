@@ -34,10 +34,17 @@ body {
   height: 42px;
 }
 
+/* The result box and the placeholder that stands in for it occupy the same slot
+   under the input, so they share its chrome: swapping one for the other must
+   not move anything that was already on screen. */
+#loading,
 #output {
   margin: 6px 10px 2px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#output {
   /* Caps how far the window can grow; longer translations scroll instead. */
   max-height: 240px;
   overflow-y: auto;
@@ -51,12 +58,61 @@ body {
   user-select: text;
 }
 
+#loading[hidden],
 #output[hidden] {
   display: none;
 }
 
 #output.error {
   color: #ff6b6b;
+}
+
+/* Exactly one line of #output text tall (1.45em of the same 15px), so the first
+   fragment replaces the dots in place instead of resizing the window. */
+#loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  height: 1.45em;
+}
+
+#loading span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f2f2f7;
+  /* Held at the resting opacity so a stalled animation still reads as dots. */
+  opacity: 0.25;
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
+
+#loading span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+#loading span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+/* The gap between the peaks is what makes it read left-to-right rather than as
+   three dots blinking together. */
+@keyframes dot-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #loading span {
+    animation: none;
+    opacity: 0.55;
+  }
 }
 
 #input {

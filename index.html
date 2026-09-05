@@ -20,6 +20,11 @@
           placeholder="说点什么…  (Enter 提交 / Esc 隐藏)"
         />
       </div>
+      <!-- The dots carry no text, so the state they stand for is on the wrapper
+           for anything that isn't looking at the screen. -->
+      <div id="loading" hidden role="status" aria-label="翻译中">
+        <span></span><span></span><span></span>
+      </div>
       <div id="output" hidden></div>
     </div>
   </body>

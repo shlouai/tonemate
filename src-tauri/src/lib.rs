@@ -25,9 +25,17 @@ async fn submit(window: WebviewWindow, text: String) {
     .await;
 
     println!();
-    if let Err(err) = result {
-        eprintln!("[tonemate] translate failed: {err}");
-        let _ = window.emit("translate:error", err);
+    match result {
+        // The frontend needs the end of the stream, not just its fragments: a
+        // response that streams nothing would otherwise leave the loading
+        // placeholder up forever.
+        Ok(_) => {
+            let _ = window.emit("translate:done", ());
+        }
+        Err(err) => {
+            eprintln!("[tonemate] translate failed: {err}");
+            let _ = window.emit("translate:error", err);
+        }
     }
 }
 

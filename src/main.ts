@@ -11,6 +11,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const bar = document.querySelector<HTMLDivElement>(".bar")!;
   const input = document.querySelector<HTMLInputElement>("#input")!;
   const output = document.querySelector<HTMLDivElement>("#output")!;
+  const loading = document.querySelector<HTMLDivElement>("#loading")!;
 
   // The window is chromeless and transparent, so anything taller than it just
   // gets clipped — the window has to be told to grow with the result box.
@@ -48,17 +49,24 @@ window.addEventListener("DOMContentLoaded", () => {
     output.textContent = "";
     output.classList.remove("error");
     output.hidden = true;
+    loading.hidden = true;
     syncWindowHeight();
   };
 
+  // The box opens on the placeholder rather than on emptiness: there's most of a
+  // second between the request going out and the first fragment coming back, and
+  // a blank box that size reads as a bug rather than as work in progress.
   void listen("translate:start", () => {
     output.textContent = "";
     output.classList.remove("error");
-    output.hidden = false;
+    output.hidden = true;
+    loading.hidden = false;
     syncWindowHeight();
   });
 
   void listen<string>("translate:delta", ({ payload }) => {
+    loading.hidden = true;
+    output.hidden = false;
     output.textContent += payload;
     // Once the box hits its max height it scrolls; follow the tail.
     output.scrollTop = output.scrollHeight;
@@ -68,9 +76,19 @@ window.addEventListener("DOMContentLoaded", () => {
   // Replaces whatever streamed in before the failure: a truncated translation
   // is worse than none, because there's no way to tell it apart from a whole one.
   void listen<string>("translate:error", ({ payload }) => {
+    loading.hidden = true;
     output.classList.add("error");
     output.textContent = `⚠ ${payload}`;
     output.hidden = false;
+    syncWindowHeight();
+  });
+
+  // Only does anything when the model answered with nothing at all — any other
+  // response retired the placeholder on its first fragment. Without this the dots
+  // would keep pulsing until Esc, promising a result that is never coming;
+  // collapsing back to a bare bar at least says so.
+  void listen("translate:done", () => {
+    loading.hidden = true;
     syncWindowHeight();
   });
 
