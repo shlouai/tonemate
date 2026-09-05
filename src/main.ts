@@ -11,6 +11,13 @@ const WINDOW_WIDTH = 640;
 /** Payload of `translate:tone`. `text` is the row's full text, not a delta. */
 type Tone = { index: number; label: string; text: string };
 
+// The name of a palette entry in src/palette.css, which is what turns it into a
+// colour. Set on <html> rather than on .bar so a future accent could reach
+// anything on the page, not just the pane.
+const applyAccent = (accent: string) => {
+  document.documentElement.dataset.accent = accent;
+};
+
 window.addEventListener("DOMContentLoaded", () => {
   const bar = document.querySelector<HTMLDivElement>(".bar")!;
   const input = document.querySelector<HTMLInputElement>("#input")!;
@@ -18,6 +25,12 @@ window.addEventListener("DOMContentLoaded", () => {
   const loading = document.querySelector<HTMLDivElement>("#loading")!;
   const grip = document.querySelector<HTMLDivElement>("#grip")!;
   const toast = document.querySelector<HTMLDivElement>("#toast")!;
+
+  // Asked for once at startup, then pushed by `settings:accent`. The wait costs
+  // nothing visible: the window is hidden until the hotkey summons it, which is
+  // long after this resolves.
+  void invoke<string>("accent").then(applyAccent, console.error);
+  void listen<string>("settings:accent", ({ payload }) => applyAccent(payload));
 
   // The window is undecorated, so there is no title bar to drag it by — the grip
   // is it. Preventing the default is what keeps the caret in the input: without

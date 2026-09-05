@@ -13,9 +13,54 @@
   <body>
     <main>
       <h1>设置</h1>
+
+      <!-- A radio group, so ← → move between the colours and the choice reads as
+           one setting with six values rather than six switches. The swatch is
+           drawn by the label: the input itself is taken off screen rather than
+           hidden, because `display: none` would also take it out of the tab
+           order. -->
+      <fieldset id="accent">
+        <legend>输入条颜色</legend>
+        <!-- The swatches are laid out in a wrapper rather than on the fieldset
+             itself: a legend is not an ordinary child, and engines disagree about
+             what it does inside a grid. -->
+        <div class="swatches">
+          <label>
+            <input type="radio" name="accent" value="graphite" />
+            <span class="swatch" data-accent="graphite"></span>
+            石墨
+          </label>
+          <label>
+            <input type="radio" name="accent" value="indigo" />
+            <span class="swatch" data-accent="indigo"></span>
+            靛蓝
+          </label>
+          <label>
+            <input type="radio" name="accent" value="pine" />
+            <span class="swatch" data-accent="pine"></span>
+            墨绿
+          </label>
+          <label>
+            <input type="radio" name="accent" value="wine" />
+            <span class="swatch" data-accent="wine"></span>
+            酒红
+          </label>
+          <label>
+            <input type="radio" name="accent" value="violet" />
+            <span class="swatch" data-accent="violet"></span>
+            紫罗兰
+          </label>
+          <label>
+            <input type="radio" name="accent" value="amber" />
+            <span class="swatch" data-accent="amber"></span>
+            琥珀
+          </label>
+        </div>
+      </fieldset>
+
       <p>
-        还没有可调的设置项。翻译用的 AWS profile、区域、模型和 effort
-        目前仍由环境变量提供 —— 见 README 的 Configuration 一节。
+        翻译用的 AWS profile、区域、模型和 effort 目前仍由环境变量提供 —— 见
+        README 的 Configuration 一节。
       </p>
     </main>
   </body>

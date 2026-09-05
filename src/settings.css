@@ -1,3 +1,7 @@
+/* Imported for the swatches alone: this window is not painted in the accent, it
+   is where the accent is picked. */
+@import "./palette.css";
+
 /* Unlike the bar, which is a dark pane floating over whatever is behind it, this
    is an ordinary window with a title bar — so it follows the system appearance
    instead of forcing one. `system-ui` rather than the bar's explicit
@@ -31,10 +35,120 @@ h1 {
 }
 
 p {
-  margin: 0;
+  margin: 20px 0 0;
   font-size: 13px;
   line-height: 1.5;
-  /* Reads as explanatory text rather than as the window's content, which is what
-     it is until there are real settings above it. */
+  /* Reads as explanatory text rather than as the window's content, which is the
+     setting above it. */
   opacity: 0.6;
+}
+
+/* A fieldset for the grouping and the legend, not for the frame: six colours in
+   a box would be a box drawn around a box. */
+#accent {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#accent legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Two rows of three: six is the whole palette, so it can be seen at once rather
+   than scrolled. The gap above is on this rather than under the legend, whose own
+   margins engines treat inconsistently. */
+.swatches {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+#accent label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  /* The whole pill is the target, and a drag across it should not select its
+     name instead of choosing the colour. Prefixed as well as not: this WebView
+     drops the unprefixed property. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#accent label:hover {
+  background: color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+/* Off screen rather than `display: none`, which would also take it out of the
+   tab order — the swatch is drawn by the label, but the radio is still what is
+   focused and what ← → move between. */
+#accent input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The tint is translucent, so on its own it would read as a pale wash of itself
+   against this window. Layered over a neutral grey instead, which is roughly what
+   it does over a window it is floating above.
+
+   As a one-colour gradient rather than as a second `background` layer: only the
+   last layer of the shorthand may carry a colour, so `background: var(--bar-bg),
+   grey` is invalid and takes the whole declaration down with it — which paints
+   nothing at all, and is not something a translucent swatch makes obvious. */
+.swatch {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background-color: #8e8e93;
+  background-image: linear-gradient(var(--bar-bg), var(--bar-bg));
+  /* Keeps the darkest swatch from dissolving into a dark window. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, CanvasText 25%, transparent);
+  /* Centres the tick below. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The tick that means "this is the one", drawn inside the swatch rather than
+   ringed around it: a ring is a few pixels of edge that has to be compared
+   against five other edges to be read, while one of six squares having a mark in
+   it is seen at a glance. It can be white on every accent because they are all
+   dark by construction, so it needs no per-colour handling.
+
+   Two borders rotated into a tick rather than a ✓ glyph, which renders at a
+   different weight and baseline in every font. Always present, revealed by
+   opacity: the swatch then holds the tick's space whether or not it is showing,
+   so choosing a colour cannot nudge the row. */
+.swatch::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  border-bottom-left-radius: 1px;
+  /* The nudge is what centres it: rotating an L about its own middle leaves the
+     tick sitting low. */
+  transform: translateY(-1px) rotate(-45deg);
+  opacity: 0;
+}
+
+#accent input:checked + .swatch::after {
+  opacity: 1;
+}
+
+/* Focus follows the radio, which cannot be seen — so it is shown on the swatch,
+   as a ring outside it. Nothing else draws a ring now, so there is no chance of
+   reading this as the choice. */
+#accent input:focus-visible + .swatch {
+  outline: 2px solid CanvasText;
+  outline-offset: 3px;
 }

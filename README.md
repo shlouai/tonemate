@@ -37,8 +37,8 @@ The window starts hidden — there is nothing to see until you summon it. Once
 tonemate lives in the menu bar and not in the Dock — its icon in the right-hand
 end of the status bar is the only part of it you can point at. Clicking it opens
 a three-item menu: summon the bar (the same thing the hotkey does), open the
-settings window, and quit. The settings window is still empty; everything under
-[Configuration](#configuration) is set through the environment for now.
+settings window, and quit. The settings window holds the bar's colour; everything
+under [Configuration](#configuration) is still set through the environment.
 
 The result box under the input is hidden until there is something to show, then
 grows the window downwards as the renderings stream in. How many you get is the
@@ -79,7 +79,15 @@ labelled rendering, then time-to-first-word and total time.
 
 ## Configuration
 
-All optional; each overrides the default shown.
+The bar's colour is picked in the settings window — 石墨, 靛蓝, 墨绿, 酒红,
+紫罗兰 or 琥珀 — and the bar repaints as you choose. The choice is kept in
+`~/Library/Application Support/com.lous008.tonemate/settings.json`, so it
+survives a restart. All six are dark panes of the same lightness, because the
+text, borders and grip drawn on them are white at some opacity; a light bar would
+be a second theme rather than a colour.
+
+Everything else is environment-only. All optional; each overrides the default
+shown.
 
 | Variable | Default |
 | --- | --- |

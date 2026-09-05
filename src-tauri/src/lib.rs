@@ -1,4 +1,5 @@
 pub mod bedrock;
+pub mod settings;
 pub mod tones;
 mod tray;
 
@@ -76,7 +77,11 @@ pub fn run() {
         // `navigator.clipboard`: WebKit refuses that one outside a user gesture
         // it recognises, and a click on a plain div isn't reliably one.
         .plugin(tauri_plugin_clipboard_manager::init())
-        .invoke_handler(tauri::generate_handler![submit])
+        .invoke_handler(tauri::generate_handler![
+            submit,
+            settings::accent,
+            settings::set_accent
+        ])
         // The settings window is reused rather than rebuilt, so closing it has
         // to mean hiding it: letting the close through destroys the webview, and
         // the next 设置… would pay to start a fresh one. Hiding also keeps this

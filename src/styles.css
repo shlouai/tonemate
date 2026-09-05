@@ -1,3 +1,5 @@
+@import "./palette.css";
+
 :root {
   color-scheme: dark;
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
@@ -25,7 +27,11 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 14px;
-  background: rgba(28, 28, 30, 0.82);
+  /* The one surface the input row and the result box both sit on, so painting it
+     is what colours the bar. The fallback is graphite spelled out, and it is what
+     shows for the moment before the stored accent arrives from Rust, and for an
+     accent the palette no longer defines. */
+  background: var(--bar-bg, rgba(28, 28, 30, 0.82));
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);

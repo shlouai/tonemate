@@ -1,0 +1,36 @@
+/* The colours the bar can be painted in, named once for both windows: the bar
+   wears one of them, and the settings window paints a swatch in each.
+
+   Selected by attribute rather than declared on `:root`, which is what lets the
+   two uses share a definition — the bar sets `data-accent` on <html>, and a
+   swatch sets it on itself, so both pick a value up through `--bar-bg`.
+
+   Every one is a dark pane at the same lightness and the same 0.82 alpha,
+   because everything drawn on top of it — the text, the borders, the grip, the
+   hover — is white at some opacity. A light accent would need a second theme's
+   worth of those, so the set is deliberately all tints of dark rather than a
+   free choice of colour. */
+
+[data-accent="graphite"] {
+  --bar-bg: rgba(28, 28, 30, 0.82);
+}
+
+[data-accent="indigo"] {
+  --bar-bg: rgba(24, 30, 54, 0.82);
+}
+
+[data-accent="pine"] {
+  --bar-bg: rgba(20, 38, 32, 0.82);
+}
+
+[data-accent="wine"] {
+  --bar-bg: rgba(48, 24, 30, 0.82);
+}
+
+[data-accent="violet"] {
+  --bar-bg: rgba(40, 26, 52, 0.82);
+}
+
+[data-accent="amber"] {
+  --bar-bg: rgba(48, 34, 18, 0.82);
+}
