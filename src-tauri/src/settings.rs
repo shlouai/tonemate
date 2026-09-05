@@ -87,6 +87,20 @@ pub fn provider_config(app: AppHandle) -> ProviderConfig {
 pub fn set_provider(app: AppHandle, provider: String) -> Result<(), String> {
     update(&app, |stored| stored.provider = provider.clone())?;
     println!("[tonemate] provider -> {provider}");
+
+    // Spawned rather than awaited so the settings window does not block on a
+    // network round trip. A bad key or wrong host appears in the log at save time
+    // rather than on the first translation, which is where the answer belongs
+    // since this window shows no validation verdict.
+    let warm_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let chosen = crate::provider::Provider::from_settings(&warm_handle);
+        match crate::provider::warm(&chosen).await {
+            Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+            Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
+        }
+    });
+
     Ok(())
 }
 
@@ -104,6 +118,20 @@ pub fn set_kimi_api_key(app: AppHandle, key: String) -> Result<(), String> {
         "[tonemate] kimi api key -> {}",
         if set { "set" } else { "cleared" }
     );
+
+    // Spawned rather than awaited so the settings window does not block on a
+    // network round trip. A bad key or wrong host appears in the log at save time
+    // rather than on the first translation, which is where the answer belongs
+    // since this window shows no validation verdict.
+    let warm_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let chosen = crate::provider::Provider::from_settings(&warm_handle);
+        match crate::provider::warm(&chosen).await {
+            Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+            Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
+        }
+    });
+
     Ok(())
 }
 
