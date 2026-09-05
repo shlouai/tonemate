@@ -25,8 +25,8 @@ pub struct Parser {
 }
 
 impl Parser {
-    /// Rows this fragment changed. A fragment carrying a newline touches two:
-    /// the row it closed and the row it opened.
+    /// Rows this fragment changed. A fragment can contain any number of complete
+    /// rows plus a partial one, and all are handled.
     pub fn push(&mut self, fragment: &str) -> Vec<Tone> {
         let mut updates = Vec::new();
         self.pending.push_str(fragment);
@@ -211,5 +211,58 @@ mod tests {
     #[test]
     fn whitespace_only_output_yields_no_rows() {
         assert_eq!(rows(&["\n  \n\n"]), vec![]);
+    }
+
+    #[test]
+    fn a_single_fragment_with_several_complete_rows_returns_updates_for_all() {
+        let mut parser = Parser::default();
+        let updates = parser.push("a\tA\nb\tB\nc\tC");
+        assert_eq!(
+            updates,
+            vec![
+                tone(0, "a", "A"),
+                tone(1, "b", "B"),
+                tone(2, "c", "C"),
+            ]
+        );
+    }
+
+    /// The contract that lets the frontend read `payload.label` only when it
+    /// creates a row: once a row is emitted with a label, that label never
+    /// changes for that index.
+    #[test]
+    fn labels_are_stable_per_index() {
+        let cases = [
+            "直译\tA\n正式\tB",
+            "\tA\nB\n直译\tC",
+            "  \t  \n直译\tX",
+        ];
+
+        for input in cases {
+            let chars: Vec<String> = input.chars().map(|c| c.to_string()).collect();
+            let fragments: Vec<&str> = chars.iter().map(String::as_str).collect();
+
+            let mut labels_by_index: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+            for update in feed(&fragments) {
+                if !update.label.is_empty() {
+                    labels_by_index
+                        .entry(update.index)
+                        .or_default()
+                        .push(update.label);
+                }
+            }
+
+            for (index, labels) in &labels_by_index {
+                let unique_labels: std::collections::HashSet<_> = labels.iter().collect();
+                assert_eq!(
+                    unique_labels.len(),
+                    1,
+                    "index {} saw multiple labels: {:?} (input: {:?})",
+                    index,
+                    labels,
+                    input
+                );
+            }
+        }
     }
 }
