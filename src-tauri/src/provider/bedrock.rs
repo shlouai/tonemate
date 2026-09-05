@@ -3,9 +3,13 @@
 //! The call lives in Rust rather than the webview for two reasons: the AWS
 //! credential chain (`~/.aws/credentials`) is only reachable from the host
 //! process, and the result has to land on the terminal's stdout.
+//!
+//! The prompt is not this module's business — it arrives as a parameter, so
+//! that every provider asks the model for the same thing.
 
 use std::collections::HashMap;
 
+use super::env_or;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_bedrockruntime::{
     error::DisplayErrorContext,
@@ -28,39 +32,9 @@ const DEFAULT_MODEL: &str = "us.anthropic.claude-opus-5";
 /// translation from turning into a multi-second reasoning pass.
 const DEFAULT_EFFORT: &str = "low";
 
-/// The direction is the model's call, not a character-class check in Rust: it
-/// already reads the text, and input that mixes scripts — a Chinese sentence
-/// carrying one English word — would fool any threshold we picked.
-///
-/// The tab-delimited line format is what lets the answer stream: each label is
-/// fixed the moment its tab arrives, so a rendering fills in character by
-/// character instead of appearing all at once at the end of the response.
-const SYSTEM_PROMPT: &str = "You are a translation engine. If the user's text is English, translate \
-     it into natural, idiomatic Chinese; otherwise translate it into natural, idiomatic English.\n\
-     Work out what the writer is doing first: what they want from the reader, how they stand in \
-     relation to that reader, and how blunt the original was. Then give 3 to 5 renderings that \
-     differ in tone, register, and directness, each one the right choice in some concrete \
-     situation. If only three are meaningfully different, give three — never pad the list with \
-     near-duplicates.\n\
-     The first line is the most faithful, most neutral rendering. Each later line sits further \
-     from it in tone.\n\
-     Output one rendering per line: a label in Chinese of 2 to 4 characters, then a single tab \
-     character (ASCII 9, \\t), then the translation. Use only the tab character as the separator—\
-     never a fullwidth space, colon, dash, or any other character. No numbering, no blank lines, \
-     no markdown, no quotes, no explanation, and never a line break inside a translation.";
-// \\t above is deliberately two characters (backslash-t notation): it names the tab for the
-// model without putting a real tab in the source, which would be invisible here and in logs.
-
 /// Built on first use so startup stays instant, then reused so subsequent
 /// translations skip credential resolution.
 static CLIENT: OnceCell<Client> = OnceCell::const_new();
-
-fn env_or(key: &str, fallback: &str) -> String {
-    std::env::var(key)
-        .ok()
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| fallback.to_string())
-}
 
 /// `effort` is an Opus/Sonnet-5-era parameter; Haiku 4.5 and older models
 /// reject it. Setting `TONEMATE_EFFORT=` (empty) drops it from the request so
@@ -89,7 +63,8 @@ async fn client() -> &'static Client {
 /// One streamed Converse call. Returns everything the model said; `on_delta`
 /// sees each text fragment as it lands, so callers can show the translation
 /// forming instead of waiting for the full response.
-async fn converse(
+pub(super) async fn converse(
+    system_prompt: &str,
     text: &str,
     max_tokens: i32,
     mut on_delta: impl FnMut(&str),
@@ -104,7 +79,7 @@ async fn converse(
         .await
         .converse_stream()
         .model_id(env_or("TONEMATE_MODEL", DEFAULT_MODEL))
-        .system(SystemContentBlock::Text(SYSTEM_PROMPT.to_string()))
+        .system(SystemContentBlock::Text(system_prompt.to_string()))
         .messages(user_turn)
         .inference_config(InferenceConfiguration::builder().max_tokens(max_tokens).build());
 
@@ -151,29 +126,4 @@ async fn converse(
     }
 
     Ok((collected, stop_reason))
-}
-
-/// Pay the one-time costs — config load, credential resolution, and the TLS
-/// handshake to Bedrock — before the user asks for anything. Measured on a
-/// warm profile, that first request carries ~1s the later ones don't, and
-/// `max_tokens: 1` buys it for a rounding error's worth of tokens. Runs against
-/// the configured model, so a bad `TONEMATE_MODEL` surfaces at startup rather
-/// than on the first translation.
-pub async fn warm() -> Result<(), String> {
-    converse("hi", 1, |_| {}).await.map(|_| ())
-}
-
-pub async fn translate(text: &str, on_delta: impl FnMut(&str)) -> Result<(), String> {
-    // Four or five renderings of the same input, so roughly five times the
-    // budget one translation needed.
-    let (translated, stop_reason) = converse(text, 4096, on_delta).await?;
-
-    if translated.trim().is_empty() {
-        return Err(format!(
-            "model returned no text (stop reason: {})",
-            stop_reason.unwrap_or_else(|| "unknown".to_string())
-        ));
-    }
-
-    Ok(())
 }

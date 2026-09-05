@@ -1,4 +1,4 @@
-pub mod bedrock;
+pub mod provider;
 pub mod settings;
 pub mod tones;
 mod tray;
@@ -25,7 +25,8 @@ async fn submit(window: WebviewWindow, text: String) {
     let _ = window.emit("translate:start", ());
 
     let mut parser = tones::Parser::default();
-    let result = bedrock::translate(&text, |fragment| {
+    let chosen = provider::Provider::from_settings(window.app_handle());
+    let result = provider::translate(&chosen, &text, |fragment| {
         print!("{fragment}");
         // stdout is line-buffered, so each fragment needs an explicit flush to
         // actually appear as it arrives rather than all at once at the newline.
@@ -132,11 +133,15 @@ pub fn run() {
             }
 
             // Off the startup path: the app is usable the moment the hotkey is
-            // registered, and by the time anyone types, Bedrock is reachable.
-            tauri::async_runtime::spawn(async {
-                match bedrock::warm().await {
-                    Ok(()) => println!("[tonemate] bedrock warm"),
-                    Err(err) => eprintln!("[tonemate] bedrock warmup failed: {err}"),
+            // registered, and by the time anyone types, the provider is reachable.
+            let warm_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let chosen = provider::Provider::from_settings(&warm_handle);
+                match provider::warm(&chosen).await {
+                    Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+                    Err(err) => {
+                        eprintln!("[tonemate] {} warmup failed: {err}", chosen.label())
+                    }
                 }
             });
 

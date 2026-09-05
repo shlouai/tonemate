@@ -1,4 +1,4 @@
-//! Exercise the Bedrock translation path without launching the GUI.
+//! Exercise the translation path without launching the GUI.
 //!
 //!   cargo run --example translate -- "今天天气不错，我们出去走走吧。"
 //!
@@ -19,9 +19,10 @@ fn main() {
     };
 
     tauri::async_runtime::block_on(async {
+        let chosen = tonemate_lib::provider::Provider::from_env();
         let warmup = Instant::now();
-        if let Err(err) = tonemate_lib::bedrock::warm().await {
-            eprintln!("[tonemate] bedrock warmup failed: {err}");
+        if let Err(err) = tonemate_lib::provider::warm(&chosen).await {
+            eprintln!("[tonemate] {} warmup failed: {err}", chosen.label());
             std::process::exit(1);
         }
         println!("[tonemate] warm in {:?}", warmup.elapsed());
@@ -35,7 +36,7 @@ fn main() {
         // Keyed by index because updates carry a row's full text, so a later
         // update for the same row replaces the earlier one.
         let mut rows: BTreeMap<usize, String> = BTreeMap::new();
-        let result = tonemate_lib::bedrock::translate(&text, |fragment| {
+        let result = tonemate_lib::provider::translate(&chosen, &text, |fragment| {
             first_word.get_or_insert_with(|| started.elapsed());
             print!("{fragment}");
             // stdout is line-buffered, so each fragment needs an explicit flush to
