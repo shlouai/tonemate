@@ -1,9 +1,11 @@
 # tonemate
 
 A Spotlight-style floating input bar: hit `Cmd+Shift+Space` anywhere, type text in
-any language, press Enter, and the translation streams into a box under the
-input. The direction picks itself — English in gets Chinese back, anything else
-gets English. Translation runs through Claude on Amazon Bedrock.
+any language, press Enter, and several translations stream into a box under the
+input — the same sentence rendered in 3 to 5 different tones, each labelled, so
+you can pick the one that fits who is reading it. The direction picks itself —
+English in gets Chinese back, anything else gets English. Translation runs through
+Claude on Amazon Bedrock.
 
 ## Prerequisites
 
@@ -33,21 +35,27 @@ The window starts hidden — there is nothing to see until you summon it. Once
 | `Esc` | Hide, clearing the result |
 
 The result box under the input is hidden until there is something to show, then
-grows the window downwards as the translation streams in. Its text can be
-selected and copied; anything longer than the box scrolls. The same exchange is
-still logged to the launching terminal:
+grows the window downwards as the renderings stream in. How many you get is the
+model's call: it reads what the input is trying to accomplish and gives 3 to 5
+renderings that genuinely differ in tone, rather than padding to a fixed count.
+The first is always the most literal. The text can be selected and copied;
+anything longer than the box scrolls. The same exchange is still logged to the
+launching terminal:
 
 ```
-[tonemate] in : 今天天气不错，我们出去走走吧。
-[tonemate] out: The weather's nice today — let's go out for a walk.
-[tonemate] in : Sorry, I'm running a few minutes late.
-[tonemate] out: 抱歉，我要晚几分钟到。
+[tonemate] in : 我明天不能来了
+[tonemate] out:
+直译	I won't be able to come tomorrow.
+正式	I'm afraid I won't be able to make it tomorrow.
+客气	Sorry, something's come up — I can't come tomorrow.
+随口	Can't make it tomorrow.
 ```
 
 `[tonemate] bedrock warm` appears shortly after startup. That is a background
 warm-up request that pays the credential-resolution and TLS-handshake cost up
-front, so the first translation is as fast as every later one (~1.8s instead of
-~3.8s). If it fails, the log says why — usually expired SSO credentials.
+front, so the first rendering appears around 1.8s after you press Enter and the
+full set totals 2.9-3.7s. If it fails, the log says why — usually expired SSO
+credentials.
 
 ## Translating without the GUI
 
@@ -59,7 +67,8 @@ cd src-tauri
 cargo run --example translate -- "今天天气不错，我们出去走走吧。"
 ```
 
-It reports time-to-first-word and total time alongside the translation.
+It prints the raw stream, then a `[tonemate] parsed N tones:` block listing each
+labelled rendering, then time-to-first-word and total time.
 
 ## Configuration
 

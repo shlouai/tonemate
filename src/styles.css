@@ -34,9 +34,9 @@ body {
   height: 42px;
 }
 
-/* The result box and the placeholder that stands in for it occupy the same slot
-   under the input, so they share its chrome: swapping one for the other must
-   not move anything that was already on screen. */
+/* The result rows and the placeholder that stands in for them occupy the same
+   slot under the input, so they share its chrome: swapping one for the other
+   must not move anything that was already on screen. */
 #loading,
 #output {
   margin: 6px 10px 2px;
@@ -44,17 +44,20 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+/* The grid is on the container rather than on each row, so the label column is
+   sized by the widest label in the whole set and every translation starts at the
+   same left edge. Rows hand their two spans straight to these columns via
+   `display: contents`. */
 #output {
-  /* Caps how far the window can grow; longer translations scroll instead. */
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 10px;
+  row-gap: 6px;
+  /* Caps how far the window can grow; longer results scroll instead. */
   max-height: 240px;
   overflow-y: auto;
-  color: #f2f2f7;
-  font-size: 15px;
-  line-height: 1.45;
-  /* Keeps the model's own line breaks, and lets the text be selected and
-     copied even though this is a div rather than a real input. */
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
+  /* Lets the text be selected and copied even though these are divs rather than
+     real inputs. */
   user-select: text;
 }
 
@@ -63,12 +66,44 @@ body {
   display: none;
 }
 
-#output.error {
+.tone {
+  display: contents;
+}
+
+/* Held against the first line of its translation rather than centred against a
+   wrapped block: the label names the row, and the row starts at the top. The
+   padding is the nudge that lines 13px text up with 15px/1.45 text. */
+.label {
+  align-self: start;
+  padding-top: 2px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: rgba(242, 242, 247, 0.45);
+  user-select: none;
+}
+
+.text {
+  color: #f2f2f7;
+  font-size: 15px;
+  line-height: 1.45;
+  /* Keeps the model's own spacing. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* An unlabelled row — and the error message, which is one — has no label
+   element, so its text takes both columns. */
+.tone.unlabeled .text {
+  grid-column: 1 / -1;
+}
+
+#output.error .text {
   color: #ff6b6b;
 }
 
-/* Exactly one line of #output text tall (1.45em of the same 15px), so the first
-   fragment replaces the dots in place instead of resizing the window. */
+/* Exactly one line of result text tall (1.45em of the same 15px `.text` uses),
+   so the first rendering replaces the dots in place instead of resizing the
+   window. */
 #loading {
   display: flex;
   align-items: center;
