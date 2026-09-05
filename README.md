@@ -5,18 +5,23 @@ any language, press Enter, and several translations stream into a box under the
 input — the same sentence rendered in 3 to 5 different tones, each labelled, so
 you can pick the one that fits who is reading it. The direction picks itself —
 English in gets Chinese back, anything else gets English. Translation runs through
-Claude on Amazon Bedrock.
+Claude on Amazon Bedrock by default, or through Kimi if you paste an API key into
+the settings window.
 
 ## Prerequisites
 
 - [Rust toolchain](https://rustup.rs) and [pnpm](https://pnpm.io)
-- AWS credentials that can call Bedrock in the configured region. By default
-  tonemate uses the `twdc-bedrock-central` profile from `~/.aws/config`; if that
-  profile is SSO-backed, log in first:
+- Credentials for one of the two translation services:
+  - **AWS Bedrock** (the default) — credentials that can call Bedrock in the
+    configured region. By default tonemate uses the `twdc-bedrock-central`
+    profile from `~/.aws/config`; if that profile is SSO-backed, log in first:
 
-  ```sh
-  aws sso login --profile twdc-bedrock-central
-  ```
+    ```sh
+    aws sso login --profile twdc-bedrock-central
+    ```
+
+  - **Kimi** — an API key from [platform.moonshot.cn](https://platform.moonshot.cn),
+    pasted into the settings window. Nothing else to install.
 
 ## Running it
 
@@ -37,8 +42,10 @@ The window starts hidden — there is nothing to see until you summon it. Once
 tonemate lives in the menu bar and not in the Dock — its icon in the right-hand
 end of the status bar is the only part of it you can point at. Clicking it opens
 a three-item menu: summon the bar (the same thing the hotkey does), open the
-settings window, and quit. The settings window holds the bar's colour; everything
-under [Configuration](#configuration) is still set through the environment.
+settings window, and quit. The settings window has two panels: 外观 holds the
+bar's colour, and 翻译服务 picks the translation service and holds its API key.
+Model ids and hosts are still set through the environment — see
+[Configuration](#configuration).
 
 The result box under the input is hidden until there is something to show, then
 grows the window downwards as the renderings stream in. How many you get is the
@@ -57,16 +64,21 @@ launching terminal:
 随口	Can't make it tomorrow.
 ```
 
-`[tonemate] bedrock warm` appears shortly after startup. That is a background
-warm-up request that pays the credential-resolution and TLS-handshake cost up
-front — it takes 2-3s on its own, and without it that time would land on your
-first translation instead. Warm, the first rendering appears about 1.8s after you
-press Enter and the full set totals 2.9-3.7s. If it fails, the log says why —
-usually expired SSO credentials.
+`[tonemate] bedrock warm` — or `[tonemate] kimi warm`, naming whichever service is
+selected — appears shortly after startup. That is a background warm-up request
+that pays the one-time setup cost up front, so it does not land on your first
+translation. On Bedrock that cost is credential resolution plus the TLS
+handshake, and takes 2-3s; Kimi has no credential chain to resolve, so it is just
+the handshake. If it fails, the log says why: expired SSO credentials on Bedrock,
+and on Kimi usually a rejected API key or the wrong host.
+
+Warm, Bedrock's first rendering appears about 1.8s after you press Enter and the
+full set totals 2.9-3.7s. Kimi is comparable and often quicker — measured at
+under 1s to the first word and about 2.3s in total.
 
 ## Translating without the GUI
 
-To exercise the Bedrock path directly — useful for checking credentials or
+To exercise the translation path directly — useful for checking credentials or
 timing a model change:
 
 ```sh
@@ -75,26 +87,46 @@ cargo run --example translate -- "今天天气不错，我们出去走走吧。"
 ```
 
 It prints the raw stream, then a `[tonemate] parsed N tones:` block listing each
-labelled rendering, then time-to-first-word and total time.
+labelled rendering, then time-to-first-word and total time. It uses Bedrock
+unless `TONEMATE_KIMI_API_KEY` is set, since it has no access to the settings
+window's choice:
+
+```sh
+TONEMATE_KIMI_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
+```
 
 ## Configuration
 
-The bar's colour is picked in the settings window — 石墨, 靛蓝, 墨绿, 酒红,
-紫罗兰 or 琥珀 — and the bar repaints as you choose. The choice is kept in
-`~/Library/Application Support/com.lous008.tonemate/settings.json`, so it
-survives a restart. All six are dark panes of the same lightness, because the
-text, borders and grip drawn on them are white at some opacity; a light bar would
-be a second theme rather than a colour.
+The settings window holds the two choices that belong to a person rather than to
+a machine, and both take effect immediately:
+
+- **输入条颜色** — 石墨, 靛蓝, 墨绿, 酒红, 紫罗兰 or 琥珀, and the bar repaints as
+  you choose. All six are dark panes of the same lightness, because the text,
+  borders and grip drawn on them are white at some opacity; a light bar would be
+  a second theme rather than a colour.
+- **翻译服务** — AWS Bedrock or Kimi. Choosing Kimi without saving a key falls
+  back to Bedrock and says so, since an empty key means "not set up yet". A key
+  that the service *rejects* is reported instead of falling back — otherwise a
+  revoked key would silently bill AWS forever.
+
+Both live in
+`~/Library/Application Support/com.lous008.tonemate/settings.json`, so they
+survive a restart. **The Kimi API key is stored there in cleartext**, readable by
+anything running as you; the file is written owner-only, which is a speed bump
+rather than protection.
 
 Everything else is environment-only. All optional; each overrides the default
 shown.
 
-| Variable | Default |
-| --- | --- |
-| `TONEMATE_AWS_PROFILE` | `twdc-bedrock-central` |
-| `TONEMATE_AWS_REGION` | `us-west-2` |
-| `TONEMATE_MODEL` | `us.anthropic.claude-opus-5` |
-| `TONEMATE_EFFORT` | `low` |
+| Variable | Default | Applies to |
+| --- | --- | --- |
+| `TONEMATE_AWS_PROFILE` | `twdc-bedrock-central` | Bedrock |
+| `TONEMATE_AWS_REGION` | `us-west-2` | Bedrock |
+| `TONEMATE_MODEL` | `us.anthropic.claude-opus-5` | Bedrock |
+| `TONEMATE_EFFORT` | `low` | Bedrock |
+| `TONEMATE_KIMI_BASE_URL` | `https://api.moonshot.cn/v1` | Kimi |
+| `TONEMATE_KIMI_MODEL` | `kimi-k2.6` | Kimi |
+| `TONEMATE_KIMI_API_KEY` | — | the CLI example only |
 
 Bedrock serves the Claude 5 family only through cross-region inference profiles,
 so `TONEMATE_MODEL` needs the `us.` prefix — a bare `anthropic.claude-opus-5` is
@@ -105,6 +137,15 @@ models that reject it:
 ```sh
 TONEMATE_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0 TONEMATE_EFFORT= pnpm tauri dev
 ```
+
+Two Kimi notes worth knowing before changing either variable. Moonshot runs a
+domestic host (`api.moonshot.cn`) and an international one
+(`api.moonshot.ai`), and a key issued for one returns `401 Invalid
+Authentication` on the other — the key string does not say which it is, so a
+`401` usually means the wrong `TONEMATE_KIMI_BASE_URL`. And `TONEMATE_KIMI_MODEL`
+should stay on `kimi-k2.6`: it is the only Kimi model whose reasoning can be
+switched off, and with reasoning on, the model spends the entire token budget
+deliberating and returns no translation at all.
 
 ## Building a release binary
 
