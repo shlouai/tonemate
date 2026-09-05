@@ -10,10 +10,78 @@ mod sse;
 
 use tauri::AppHandle;
 
-/// The direction is the model's call, not a character-class check in Rust: it
-/// already reads the text, and input that mixes scripts — a Chinese sentence
-/// carrying one English word — would fool any threshold we picked.
+/// Which way a translation runs. Decided in Rust rather than inferred by the
+/// model, because the model cannot be made to infer it reliably: `kimi-k2.6`
+/// pins `temperature` at 0.6 and rejects any other value, so its obedience to an
+/// inferred rule is probabilistic by construction. Measured with the direction
+/// left to the model, Chinese input carrying English words came back in the
+/// wrong language in 5 of 24 runs — and sometimes mixed both languages inside a
+/// single response, one row English and the next Chinese.
 ///
+/// Naming the target removes the inference instead of making it likelier.
+#[derive(Debug, PartialEq)]
+enum Direction {
+    /// The user typed Chinese, so every line must come back English.
+    FromChinese,
+    /// No Chinese present. Which way this goes is genuinely the model's call:
+    /// telling English from French in Rust needs a language identifier, and
+    /// guessing wrong would be worse than the ambiguity. The documented rule —
+    /// English in gets Chinese back, anything else gets English — is handed to
+    /// the model intact, and no failure was observed on this path.
+    Other,
+}
+
+impl Direction {
+    /// Presence of one Han character, not a proportion of them.
+    ///
+    /// This is what the old "any threshold would be fooled" objection was really
+    /// about, and it is right about ratios: `帮我 review 一下这个 PR` is 43% Han
+    /// and `这个 feature 的 deadline 是下周五` is 32%, yet both are plainly
+    /// Chinese sentences borrowing English nouns. Presence has no threshold to
+    /// tune and gets both right — a Chinese speaker reaching for an English term
+    /// is still writing Chinese and still wants English back.
+    fn detect(text: &str) -> Self {
+        if text.chars().any(is_han) {
+            Direction::FromChinese
+        } else {
+            Direction::Other
+        }
+    }
+
+    /// Stated as a command about every line, because the failure being fixed was
+    /// per-line rather than per-response.
+    fn instruction(&self) -> &'static str {
+        match self {
+            Direction::FromChinese => {
+                "The user's text is Chinese: every line you output must be in English."
+            }
+            Direction::Other => {
+                "The user's text is not Chinese. If it is English, every line you output must be \
+                 in Chinese; otherwise every line you output must be in English."
+            }
+        }
+    }
+}
+
+/// The Han blocks that matter here: the common ideographs, Extension A, and the
+/// compatibility ideographs. Kana is deliberately absent — this app translates
+/// between Chinese and English, and Japanese text usually carries kanji anyway.
+fn is_han(c: char) -> bool {
+    matches!(c,
+        '\u{3400}'..='\u{4DBF}'   // CJK Extension A
+        | '\u{4E00}'..='\u{9FFF}' // CJK Unified Ideographs
+        | '\u{F900}'..='\u{FAFF}' // CJK Compatibility Ideographs
+    )
+}
+
+/// The prompt for one input: the target language, the shared instructions, then
+/// the target language again. Repeated deliberately — a single mention at the
+/// top was what the model drifted from mid-response.
+pub(crate) fn prompt_for(text: &str) -> String {
+    let instruction = Direction::detect(text).instruction();
+    format!("You are a translation engine. {instruction}\n{SYSTEM_PROMPT_BODY}\n{instruction}")
+}
+
 /// The tab-delimited line format is what lets the answer stream: each label is
 /// fixed the moment its tab arrives, so a rendering fills in character by
 /// character instead of appearing all at once at the end of the response.
@@ -37,12 +105,8 @@ use tauri::AppHandle;
 ///
 /// With all three, 40 consecutive Kimi runs across eight inputs produced no
 /// wrong-direction line, no duplicated label, and no malformed separator.
-pub(crate) const SYSTEM_PROMPT: &str =
-    "You are a translation engine. Decide the target language first and never get it wrong:\n\
-     - If the user's text contains any Chinese, the output must be English.\n\
-     - Otherwise the output must be Chinese.\n\
-     The output language is never the same as the input language. Restating the input in its own \
-     language is always wrong, however good the restatement.\n\
+const SYSTEM_PROMPT_BODY: &str =
+    "Restating the input in its own language is always wrong, however good the restatement.\n\
      Work out what the writer is doing: what they want from the reader, how they stand in relation \
      to that reader, and how blunt the original was. Then give 3 to 5 translations that differ in \
      tone, register, and directness, each the right choice in some concrete situation. If only \
@@ -172,7 +236,7 @@ pub(crate) fn env_or(key: &str, fallback: &str) -> String {
 /// than on the first translation.
 pub async fn warm(provider: &Provider) -> Result<(), String> {
     let result = match provider {
-        Provider::Bedrock => match bedrock::converse(SYSTEM_PROMPT, "hi", 1, |_| {}).await {
+        Provider::Bedrock => match bedrock::converse(&prompt_for("hi"), "hi", 1, |_| {}).await {
             Ok(_) => Ok(()),
             Err(err) if err.starts_with("model returned no text") => Ok(()),
             Err(err) => Err(err),
@@ -183,7 +247,7 @@ pub async fn warm(provider: &Provider) -> Result<(), String> {
         Provider::Kimi(key) => {
             match openai_compat::converse(
                 &Provider::kimi_endpoint(key),
-                SYSTEM_PROMPT,
+                &prompt_for("hi"),
                 "hi",
                 1,
                 |_| {},
@@ -206,11 +270,11 @@ pub async fn translate(
     on_delta: impl FnMut(&str),
 ) -> Result<(), String> {
     let result = match provider {
-        Provider::Bedrock => bedrock::converse(SYSTEM_PROMPT, text, MAX_TOKENS, on_delta).await,
+        Provider::Bedrock => bedrock::converse(&prompt_for(text), text, MAX_TOKENS, on_delta).await,
         Provider::Kimi(key) => {
             openai_compat::converse(
                 &Provider::kimi_endpoint(key),
-                SYSTEM_PROMPT,
+                &prompt_for(text),
                 text,
                 MAX_TOKENS as u32,
                 on_delta,
@@ -258,5 +322,76 @@ mod tests {
             _ => panic!("expected Bedrock fallback"),
         }
         assert_eq!(provider.label(), "bedrock");
+    }
+
+    #[test]
+    fn chinese_input_is_translated_into_english() {
+        assert_eq!(Direction::detect("我明天不能来了"), Direction::FromChinese);
+    }
+
+    /// The failure this whole mechanism exists for. Both of these are ordinary
+    /// Chinese sentences borrowing English nouns, and both are under half Han by
+    /// character count — 43% and 32% — so a ratio threshold calls them English
+    /// and sends the translation the wrong way.
+    #[test]
+    fn chinese_carrying_english_words_is_still_chinese() {
+        for text in [
+            "帮我 review 一下这个 PR。",
+            "这个 feature 的 deadline 是下周五。",
+            "server 挂了,你能 restart 一下吗?",
+            "把 log 发我看看。",
+            "这个 bug 在 production 环境下才会出现,本地跑不出来。",
+        ] {
+            assert_eq!(
+                Direction::detect(text),
+                Direction::FromChinese,
+                "{text:?} should translate into English"
+            );
+        }
+    }
+
+    #[test]
+    fn text_with_no_chinese_is_left_to_the_model() {
+        for text in [
+            "Could you review this by Friday?",
+            "Bonjour, comment allez-vous?",
+            "",
+            "42",
+        ] {
+            assert_eq!(Direction::detect(text), Direction::Other, "{text:?}");
+        }
+    }
+
+    /// Han lives in several blocks; a rare character must not read as "no
+    /// Chinese here" and silently flip the direction.
+    #[test]
+    fn han_outside_the_common_block_still_counts() {
+        // 㐀 is CJK Extension A, 豈 is a Compatibility Ideograph.
+        assert_eq!(Direction::detect("㐀"), Direction::FromChinese);
+        assert_eq!(Direction::detect("豈"), Direction::FromChinese);
+    }
+
+    /// The instruction has to be unmissable, because the model was observed
+    /// mixing both languages inside a single response.
+    #[test]
+    fn the_prompt_names_the_target_language_twice() {
+        let prompt = prompt_for("我明天不能来了");
+        assert_eq!(
+            prompt
+                .matches("every line you output must be in English")
+                .count(),
+            2,
+            "the target should be stated up front and restated at the end"
+        );
+        assert!(!prompt.contains("output must be Chinese"));
+    }
+
+    /// Non-Chinese input keeps the behaviour the README documents: English in
+    /// gets Chinese back, anything else gets English.
+    #[test]
+    fn non_chinese_input_keeps_the_documented_two_way_rule() {
+        let prompt = prompt_for("Could you review this by Friday?");
+        assert!(prompt.contains("If it is English, every line you output must be in Chinese"));
+        assert!(prompt.contains("otherwise every line you output must be in English"));
     }
 }

@@ -78,6 +78,28 @@ wrong that silently billing AWS would hide. This is why the error string is
 prefixed with the provider name: with two sources, `API key not valid` alone does
 not say whose.
 
+**The translation direction is decided in Rust, not inferred by the model.**
+`Direction::detect` returns `FromChinese` when the input contains any Han
+character, and the prompt then *tells* the model which language every line must
+be in, stated twice. This replaces the original decision to leave the direction
+to the model, which does not survive contact with a model whose `temperature` is
+pinned: measured with the direction inferred, Chinese input came back in Chinese
+in 7 of 64 runs across a broad input set, and in 5 of 24 when it carried English
+words — sometimes mixing both languages inside one response, one row English and
+the next Chinese. With the direction named, 141 runs produced none.
+
+The old rationale was that "text that mixes scripts would defeat any threshold
+Rust could apply." That is true of a *ratio* and is why none is used:
+`帮我 review 一下这个 PR` is 43% Han and `这个 feature 的 deadline 是下周五` is
+32%, yet both are Chinese sentences borrowing English nouns. Presence of one Han
+character has no threshold to tune and classifies both correctly.
+
+Only the Chinese side is decided locally. With no Han present, the documented
+rule — English in gets Chinese back, anything else gets English — is handed to
+the model intact, because separating English from French in Rust needs a real
+language identifier and guessing wrong would be worse than the ambiguity. No
+failure was observed on that path.
+
 **`provider` is stored as a string, not a serialised enum.** An unknown provider
 name — written by a future version, read by this one — degrades to Bedrock. Same
 tolerance `accent` already has for a colour `palette.css` no longer defines.
