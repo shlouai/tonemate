@@ -31,10 +31,23 @@ const DEFAULT_EFFORT: &str = "low";
 /// The direction is the model's call, not a character-class check in Rust: it
 /// already reads the text, and input that mixes scripts — a Chinese sentence
 /// carrying one English word — would fool any threshold we picked.
+///
+/// The tab-delimited line format is what lets the answer stream: each label is
+/// fixed the moment its tab arrives, so a rendering fills in character by
+/// character instead of appearing all at once at the end of the response.
 const SYSTEM_PROMPT: &str = "You are a translation engine. If the user's text is English, translate \
-     it into natural, idiomatic Chinese; otherwise translate it into natural, idiomatic English. \
-     Preserve the original tone and register. Output only the translation: no preamble, no quotes, \
-     no explanation, no notes.";
+     it into natural, idiomatic Chinese; otherwise translate it into natural, idiomatic English.\n\
+     Work out what the writer is doing first: what they want from the reader, how they stand in \
+     relation to that reader, and how blunt the original was. Then give 3 to 5 renderings that \
+     differ in tone, register, and directness, each one the right choice in some concrete \
+     situation. If only three are meaningfully different, give three — never pad the list with \
+     near-duplicates.\n\
+     The first line is the most faithful, most neutral rendering. Each later line sits further \
+     from it in tone.\n\
+     Output one rendering per line: a label in Chinese of 2 to 4 characters, then a single tab \
+     character (ASCII 9, \\t), then the translation. Use only the tab character as the separator—\
+     never a fullwidth space, colon, dash, or any other character. No numbering, no blank lines, \
+     no markdown, no quotes, no explanation, and never a line break inside a translation.";
 
 /// Built on first use so startup stays instant, then reused so subsequent
 /// translations skip credential resolution.
@@ -149,7 +162,9 @@ pub async fn warm() -> Result<(), String> {
 }
 
 pub async fn translate(text: &str, on_delta: impl FnMut(&str)) -> Result<String, String> {
-    let (translated, stop_reason) = converse(text, 2048, on_delta).await?;
+    // Four or five renderings of the same input, so roughly five times the
+    // budget one translation needed.
+    let (translated, stop_reason) = converse(text, 4096, on_delta).await?;
 
     if translated.trim().is_empty() {
         return Err(format!(
