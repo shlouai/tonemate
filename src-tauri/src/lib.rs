@@ -81,7 +81,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             submit,
             settings::accent,
-            settings::set_accent
+            settings::set_accent,
+            settings::provider_config,
+            settings::set_provider,
+            settings::set_kimi_api_key
         ])
         // The settings window is reused rather than rebuilt, so closing it has
         // to mean hiding it: letting the close through destroys the webview, and
