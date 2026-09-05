@@ -43,7 +43,6 @@ async function wireProvider() {
   );
   const keyInput = document.querySelector<HTMLInputElement>("#kimi-key");
   const clearButton = document.querySelector<HTMLButtonElement>("#kimi-clear");
-  if (!keyInput || !clearButton) return;
 
   let config = await invoke<ProviderConfig>("provider_config").catch(
     (error): ProviderConfig => {
@@ -59,13 +58,23 @@ async function wireProvider() {
   for (const radio of radios) {
     radio.addEventListener("change", () => {
       if (!radio.checked) return;
-      config = { ...config, provider: radio.value };
-      render();
-      void invoke("set_provider", { provider: radio.value }).catch(
-        console.error,
-      );
+      const newProvider = radio.value;
+      void invoke("set_provider", { provider: newProvider })
+        .then(() => {
+          config = { ...config, provider: newProvider };
+          render();
+        })
+        .catch((error) => {
+          console.error(error);
+          // The optimistic version was wrong: this window is created once and
+          // never re-reads from settings, so painting a lie here persists for
+          // the whole session. Repaint from the config the backend agrees with.
+          render();
+        });
     });
   }
+
+  if (!keyInput || !clearButton) return;
 
   // On `change`, so the key is sent on blur or Enter rather than on every
   // keystroke — a key is pasted, not typed, and each save writes the file and
@@ -77,17 +86,35 @@ async function wireProvider() {
   keyInput.addEventListener("change", () => {
     const key = keyInput.value.trim();
     if (!key) return;
-    keyInput.value = "";
-    config = { ...config, kimi_key_set: true };
-    render();
-    void invoke("set_kimi_api_key", { key }).catch(console.error);
+    void invoke("set_kimi_api_key", { key })
+      .then(() => {
+        keyInput.value = "";
+        config = { ...config, kimi_key_set: true };
+        render();
+      })
+      .catch((error) => {
+        console.error(error);
+        // The optimistic version was wrong: this window is created once and
+        // never re-reads from settings, so painting a lie here persists for
+        // the whole session. Repaint from the config the backend agrees with.
+        render();
+      });
   });
 
   clearButton.addEventListener("click", () => {
-    keyInput.value = "";
-    config = { ...config, kimi_key_set: false };
-    render();
-    void invoke("set_kimi_api_key", { key: "" }).catch(console.error);
+    void invoke("set_kimi_api_key", { key: "" })
+      .then(() => {
+        keyInput.value = "";
+        config = { ...config, kimi_key_set: false };
+        render();
+      })
+      .catch((error) => {
+        console.error(error);
+        // The optimistic version was wrong: this window is created once and
+        // never re-reads from settings, so painting a lie here persists for
+        // the whole session. Repaint from the config the backend agrees with.
+        render();
+      });
   });
 
   function render() {
