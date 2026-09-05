@@ -75,7 +75,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const row = document.createElement("div");
     // A row the model didn't label has no label element at all, so its text can
     // take both grid columns instead of sitting in the narrow one.
-    row.className = label ? "tone" : "tone unlabeled";
+    row.className = label ? "tone" : "tone unlabelled";
     if (label) {
       const labelEl = document.createElement("span");
       labelEl.className = "label";
@@ -140,9 +140,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // Only does anything when the model answered with nothing at all — any other
   // response retired the placeholder on its first rendering. Without this the
   // dots would keep pulsing until Esc, promising a result that is never coming;
-  // collapsing back to a bare bar at least says so.
+  // collapsing back to a bare bar at least says so. Once the set is complete,
+  // scroll back to the top so the finished set is read from its anchor (the first
+  // row is always the most literal).
   void listen("translate:done", () => {
     loading.hidden = true;
+    output.scrollTop = 0;
     syncWindowHeight();
   });
 

@@ -72,12 +72,18 @@ body {
 
 /* Held against the first line of its translation rather than centred against a
    wrapped block: the label names the row, and the row starts at the top. The
-   padding is the nudge that lines 13px text up with 15px/1.45 text. */
+   padding is the nudge that lines 13px text up with 15px/1.45 text. The max-width
+   caps the label column: a label should be 2-4 characters by contract, and if the
+   model ignores that and emits a sentence-length label, this keeps it from breaking
+   the grid by forcing a horizontal scrollbar. */
 .label {
   align-self: start;
   padding-top: 2px;
   font-size: 13px;
   white-space: nowrap;
+  max-width: 6em;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: rgba(242, 242, 247, 0.45);
   user-select: none;
 }
@@ -93,7 +99,7 @@ body {
 
 /* An unlabelled row — and the error message, which is one — has no label
    element, so its text takes both columns. */
-.tone.unlabeled .text {
+.tone.unlabelled .text {
   grid-column: 1 / -1;
 }
 
