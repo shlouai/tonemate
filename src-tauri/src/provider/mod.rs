@@ -147,8 +147,14 @@ pub async fn warm(provider: &Provider) -> Result<(), String> {
         // transport would otherwise call a failure. Only reachability is being
         // tested here, so that error is the success case.
         Provider::Kimi(key) => {
-            match openai_compat::converse(&Provider::kimi_endpoint(key), SYSTEM_PROMPT, "hi", 1, |_| {})
-                .await
+            match openai_compat::converse(
+                &Provider::kimi_endpoint(key),
+                SYSTEM_PROMPT,
+                "hi",
+                1,
+                |_| {},
+            )
+            .await
             {
                 Ok(_) => Ok(()),
                 Err(err) if err.starts_with("model returned no text") => Ok(()),
