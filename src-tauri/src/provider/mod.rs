@@ -17,22 +17,52 @@ use tauri::AppHandle;
 /// The tab-delimited line format is what lets the answer stream: each label is
 /// fixed the moment its tab arrives, so a rendering fills in character by
 /// character instead of appearing all at once at the end of the response.
+///
+/// Three things here are stricter than they look like they need to be, and each
+/// is a failure measured against a real model rather than a precaution:
+///
+/// 1. **The direction rule comes first and is stated as a prohibition.** As one
+///    clause competing with a longer instruction about tonal variety, it lost:
+///    Kimi answered `我明天不能来了` with five Chinese paraphrases in 6 of 20
+///    runs, because varying the tone of the original is a plausible reading of
+///    the rest of the prompt.
+/// 2. **The label is defined as naming the tone, and never a paraphrase.**
+///    Otherwise it drifts into restating the input — `算了吧` came back labelled
+///    算了 / 罢了 / 罢了 / 拉倒, which makes the column useless for choosing a
+///    rendering, in 7 of 20 runs.
+/// 3. **The separator is a real tab, shown in a worked example.** An earlier
+///    version named it in backslash-t notation, and the model sometimes emitted
+///    those two characters literally; `tones::Parser` splits on U+0009 alone, so
+///    such a row rendered with its label welded onto the front of the text.
+///
+/// With all three, 40 consecutive Kimi runs across eight inputs produced no
+/// wrong-direction line, no duplicated label, and no malformed separator.
 pub(crate) const SYSTEM_PROMPT: &str =
-    "You are a translation engine. If the user's text is English, translate \
-     it into natural, idiomatic Chinese; otherwise translate it into natural, idiomatic English.\n\
-     Work out what the writer is doing first: what they want from the reader, how they stand in \
-     relation to that reader, and how blunt the original was. Then give 3 to 5 renderings that \
-     differ in tone, register, and directness, each one the right choice in some concrete \
-     situation. If only three are meaningfully different, give three — never pad the list with \
-     near-duplicates.\n\
+    "You are a translation engine. Decide the target language first and never get it wrong:\n\
+     - If the user's text contains any Chinese, the output must be English.\n\
+     - Otherwise the output must be Chinese.\n\
+     The output language is never the same as the input language. Restating the input in its own \
+     language is always wrong, however good the restatement.\n\
+     Work out what the writer is doing: what they want from the reader, how they stand in relation \
+     to that reader, and how blunt the original was. Then give 3 to 5 translations that differ in \
+     tone, register, and directness, each the right choice in some concrete situation. If only \
+     three are meaningfully different, give three — never pad the list with near-duplicates.\n\
      The first line is the most faithful, most neutral rendering. Each later line sits further \
      from it in tone.\n\
-     Output one rendering per line: a label in Chinese of 2 to 4 characters, then a single tab \
-     character (ASCII 9, \\t), then the translation. Use only the tab character as the separator—\
-     never a fullwidth space, colon, dash, or any other character. No numbering, no blank lines, \
-     no markdown, no quotes, no explanation, and never a line break inside a translation.";
-// \\t above is deliberately two characters (backslash-t notation): it names the tab for the
-// model without putting a real tab in the source, which would be invisible here and in logs.
+     Each line is: a label, then one TAB character, then the translation.\n\
+     The label is 2 to 4 Chinese characters naming the TONE — 直白, 委婉, 正式, 客气, 冷淡, 随口 \
+     and the like. It describes how the line sounds. It is never a translation, never a paraphrase \
+     of the input, and never repeated on another line.\n\
+     Separate label from translation with one real TAB character (U+0009) and nothing else. Never \
+     write the two characters backslash-t. Never use a space, fullwidth space, colon, or dash.\n\
+     Example of one correct line:\n\
+     委婉\tI'm afraid I can't make it tomorrow.\n\
+     No numbering, no blank lines, no markdown, no quotes, no explanation, and no line break \
+     inside a translation.";
+// The `\t` in the example line above is an escape sequence, so it compiles to one real tab while
+// staying visible in this source. An earlier version wrote `\\t` — two characters — on the theory
+// that a tab would be invisible here; that confused a pasted tab byte with the escape, and cost us
+// a model that copied the notation instead of obeying it.
 
 /// Four or five renderings of the same input, so roughly five times the budget
 /// one translation needed.

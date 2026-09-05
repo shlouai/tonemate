@@ -58,10 +58,11 @@ launching terminal:
 ```
 [tonemate] in : 我明天不能来了
 [tonemate] out:
-直译	I won't be able to come tomorrow.
-正式	I'm afraid I won't be able to make it tomorrow.
-客气	Sorry, something's come up — I can't come tomorrow.
-随口	Can't make it tomorrow.
+直白	I can't come tomorrow.
+委婉	I'm afraid I won't be able to make it tomorrow.
+正式	I regret to inform you that I will be unable to attend tomorrow.
+客气	Sorry, something's come up and I won't be able to come by tomorrow.
+冷淡	Not coming tomorrow.
 ```
 
 `[tonemate] bedrock warm` — or `[tonemate] kimi warm`, naming whichever service is

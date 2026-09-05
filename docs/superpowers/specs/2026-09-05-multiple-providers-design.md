@@ -134,9 +134,25 @@ successful runs with reasoning disabled:
 | Kimi `kimi-k2.6` | ~2.4s | ~3.3s |
 | Bedrock Claude Opus 5 | ~1.8s | 2.9-3.7s |
 
-**Format compliance was 10/10:** five rows per response, every row tab-delimited,
-Chinese labels, and the direction auto-detected correctly in both directions. The
-existing `SYSTEM_PROMPT` needs no Kimi-specific wording.
+**Format compliance was 10/10** in the ten runs used to choose Kimi: five rows per
+response, every row tab-delimited, Chinese labels, direction correct both ways.
+
+**That sample was too small, and the conclusion drawn from it — that the existing
+`SYSTEM_PROMPT` needed no change — was wrong.** Measured later over 20 runs
+across eight inputs, the original prompt produced a wrong-direction answer in 6
+and labels that paraphrased the input rather than naming a tone in 7. `kimi-k2.6`
+also pins `temperature` (0.6 with reasoning off, 1.0 with it on) and rejects any
+other value, so the variance cannot be damped from our side; the prompt is the
+only lever. It was rewritten to state the direction rule first as a prohibition,
+to define the label as naming a tone and never a paraphrase, and to show the
+separator as a real tab in a worked example instead of naming it in backslash-t
+notation — which Kimi sometimes emitted literally, welding the label onto the
+text. 40 consecutive runs then came back clean on all three counts.
+
+The lesson worth keeping: Claude tolerated a prompt whose direction rule was one
+clause among many. A shared prompt is only as good as the least instruction-
+adherent model behind it, so format compliance needs measuring per provider at a
+sample size that can actually see a 30% failure rate.
 
 **There is no problematic rate limit.** An earlier probe hit `429` on
 back-to-back calls, which suggested the startup warm-up could collide with a
