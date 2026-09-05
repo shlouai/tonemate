@@ -28,7 +28,6 @@ fn main() {
 
         println!("[tonemate] in : {text}");
         println!("[tonemate] out:");
-        let _ = std::io::stdout().flush();
 
         let started = Instant::now();
         let mut first_word = None;
@@ -39,6 +38,8 @@ fn main() {
         let result = tonemate_lib::bedrock::translate(&text, |fragment| {
             first_word.get_or_insert_with(|| started.elapsed());
             print!("{fragment}");
+            // stdout is line-buffered, so each fragment needs an explicit flush to
+            // actually appear as it arrives rather than all at once at the newline.
             let _ = std::io::stdout().flush();
             for tone in parser.push(fragment) {
                 rows.insert(tone.index, format!("[{}] {}", tone.label, tone.text));

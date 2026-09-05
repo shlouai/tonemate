@@ -48,6 +48,8 @@ const SYSTEM_PROMPT: &str = "You are a translation engine. If the user's text is
      character (ASCII 9, \\t), then the translation. Use only the tab character as the separator—\
      never a fullwidth space, colon, dash, or any other character. No numbering, no blank lines, \
      no markdown, no quotes, no explanation, and never a line break inside a translation.";
+// \\t above is deliberately two characters (backslash-t notation): it names the tab for the
+// model without putting a real tab in the source, which would be invisible here and in logs.
 
 /// Built on first use so startup stays instant, then reused so subsequent
 /// translations skip credential resolution.
@@ -161,7 +163,7 @@ pub async fn warm() -> Result<(), String> {
     converse("hi", 1, |_| {}).await.map(|_| ())
 }
 
-pub async fn translate(text: &str, on_delta: impl FnMut(&str)) -> Result<String, String> {
+pub async fn translate(text: &str, on_delta: impl FnMut(&str)) -> Result<(), String> {
     // Four or five renderings of the same input, so roughly five times the
     // budget one translation needed.
     let (translated, stop_reason) = converse(text, 4096, on_delta).await?;
@@ -173,5 +175,5 @@ pub async fn translate(text: &str, on_delta: impl FnMut(&str)) -> Result<String,
         ));
     }
 
-    Ok(translated.trim().to_string())
+    Ok(())
 }

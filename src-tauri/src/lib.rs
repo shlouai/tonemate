@@ -15,15 +15,14 @@ async fn submit(window: WebviewWindow, text: String) {
     // The renderings arrive on lines of their own, so the label gets its own
     // line too rather than sitting in front of the first one.
     println!("[tonemate] out:");
-    // stdout is line-buffered, so each fragment needs an explicit flush to
-    // actually appear as it arrives rather than all at once at the newline.
-    let _ = std::io::stdout().flush();
 
     let _ = window.emit("translate:start", ());
 
     let mut parser = tones::Parser::default();
     let result = bedrock::translate(&text, |fragment| {
         print!("{fragment}");
+        // stdout is line-buffered, so each fragment needs an explicit flush to
+        // actually appear as it arrives rather than all at once at the newline.
         let _ = std::io::stdout().flush();
         for tone in parser.push(fragment) {
             let _ = window.emit("translate:tone", tone);
