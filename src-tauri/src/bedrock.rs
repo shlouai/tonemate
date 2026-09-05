@@ -28,9 +28,13 @@ const DEFAULT_MODEL: &str = "us.anthropic.claude-opus-5";
 /// translation from turning into a multi-second reasoning pass.
 const DEFAULT_EFFORT: &str = "low";
 
-const SYSTEM_PROMPT: &str = "You are a translation engine. Translate the user's text into natural, \
-     idiomatic English, preserving its tone and register. Output only the translation: no preamble, \
-     no quotes, no explanation, no notes.";
+/// The direction is the model's call, not a character-class check in Rust: it
+/// already reads the text, and input that mixes scripts — a Chinese sentence
+/// carrying one English word — would fool any threshold we picked.
+const SYSTEM_PROMPT: &str = "You are a translation engine. If the user's text is English, translate \
+     it into natural, idiomatic Chinese; otherwise translate it into natural, idiomatic English. \
+     Preserve the original tone and register. Output only the translation: no preamble, no quotes, \
+     no explanation, no notes.";
 
 /// Built on first use so startup stays instant, then reused so subsequent
 /// translations skip credential resolution.

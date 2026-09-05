@@ -1,8 +1,9 @@
 # tonemate
 
 A Spotlight-style floating input bar: hit `Cmd+Shift+Space` anywhere, type text in
-any language, press Enter, and the English translation streams into a box under
-the input. Translation runs through Claude on Amazon Bedrock.
+any language, press Enter, and the translation streams into a box under the
+input. The direction picks itself — English in gets Chinese back, anything else
+gets English. Translation runs through Claude on Amazon Bedrock.
 
 ## Prerequisites
 
@@ -39,6 +40,8 @@ still logged to the launching terminal:
 ```
 [tonemate] in : 今天天气不错，我们出去走走吧。
 [tonemate] out: The weather's nice today — let's go out for a walk.
+[tonemate] in : Sorry, I'm running a few minutes late.
+[tonemate] out: 抱歉，我要晚几分钟到。
 ```
 
 `[tonemate] bedrock warm` appears shortly after startup. That is a background
