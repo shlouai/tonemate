@@ -78,8 +78,8 @@ pub struct Parser { /* unclosed line, count of rows emitted */ }
 impl Parser {
     /// Rows this fragment changed. A fragment carrying a newline touches two.
     pub fn push(&mut self, fragment: &str) -> Vec<Tone>;
-    /// The last line has no trailing newline; and if nothing parsed at all,
-    /// the whole raw output becomes one unlabelled row.
+    /// Closes the row still buffered, since the model usually omits the
+    /// trailing newline.
     pub fn finish(&mut self) -> Vec<Tone>;
 }
 ```
@@ -100,11 +100,11 @@ the state a delta protocol would need on both sides.
   empty `label`, the whole line as `text`
 - At end of stream an unclosed final row is closed by the same rules, since the
   model usually omits the trailing newline
-- If no row parsed at all, `finish` yields the entire raw output as one
-  unlabelled row
-
-Malformed output degrades to showing the text rather than to an error. A
-translation the user can read beats a parser complaint.
+Malformed output degrades to showing the text rather than to an error: a
+translation the user can read beats a parser complaint. No separate
+whole-output fallback is needed on top of the per-row rules. Output that ignores
+the format entirely arrives as one unlabelled row per line, and output that is
+nothing but whitespace is already rejected upstream by `translate`.
 
 ### Events
 
