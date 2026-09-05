@@ -152,3 +152,148 @@ p {
   outline: 2px solid CanvasText;
   outline-offset: 3px;
 }
+
+/* The inputs come first in the markup so `:checked ~` can reach both the tab
+   bar and the panels. Off screen rather than `display: none`, for the same
+   reason the accent radios are: the tab strip has to stay keyboard-reachable. */
+.tabbed > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tabbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.tabbar label {
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  /* The active tab is marked with a rule flush against the strip's own border,
+     so the two read as one edge rather than as two lines. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  opacity: 0.6;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tabbar label:hover {
+  opacity: 0.85;
+}
+
+.panel {
+  display: none;
+}
+
+#tab-appearance:checked ~ .tabbar label[for="tab-appearance"],
+#tab-service:checked ~ .tabbar label[for="tab-service"] {
+  opacity: 1;
+  font-weight: 600;
+  border-bottom-color: CanvasText;
+}
+
+#tab-appearance:checked ~ #panel-appearance,
+#tab-service:checked ~ #panel-service {
+  display: block;
+}
+
+/* Focus has to be shown on the label, since the input it belongs to cannot be
+   seen. Addressed by id rather than by position: a positional selector would
+   silently target the wrong tab the moment a third one is added. */
+#tab-appearance:focus-visible ~ .tabbar label[for="tab-appearance"],
+#tab-service:focus-visible ~ .tabbar label[for="tab-service"] {
+  outline: 2px solid CanvasText;
+  outline-offset: 2px;
+}
+
+/* Same reasoning as #accent: the fieldset is for the grouping and the legend,
+   not for a frame. */
+#provider {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#provider legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* One per row rather than side by side: each carries a note, and the list grows
+   as services are added. */
+.providers {
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+#provider label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#provider label:hover {
+  background: color-mix(in srgb, CanvasText 8%, transparent);
+}
+
+/* Visible here, unlike the accent radios: there is no swatch standing in for
+   the control, so the dot is what says which service is chosen. */
+#provider input {
+  margin: 0;
+}
+
+#provider .note {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.key {
+  margin-top: 18px;
+}
+
+.key > label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.key-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+#kimi-key {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+#kimi-clear {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 13px;
+}
+
+.hint {
+  /* Overrides the `p` rule's 20px top margin: this sits directly under the
+     field it describes. */
+  margin: 6px 0 0;
+  font-size: 12px;
+}

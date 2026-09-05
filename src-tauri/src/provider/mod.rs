@@ -55,6 +55,20 @@ pub enum Provider {
     Kimi(String),
 }
 
+/// Which provider a stored setting pair means. Split out from `from_settings`
+/// so the fallback rule can be tested: an `AppHandle` cannot be built in a
+/// unit test, and this rule is the one the user notices when it is wrong.
+fn choose(provider: &str, kimi_key: &str) -> Provider {
+    match provider {
+        "kimi" if kimi_key.is_empty() => {
+            println!("[tonemate] kimi selected but no api key set; using bedrock");
+            Provider::Bedrock
+        }
+        "kimi" => Provider::Kimi(kimi_key.to_string()),
+        _ => Provider::Bedrock,
+    }
+}
+
 impl Provider {
     /// What the user chose, or Bedrock when they chose nothing usable. Read per
     /// call rather than cached, so a change in the settings window takes effect
@@ -64,16 +78,10 @@ impl Provider {
     /// empty key means "not configured yet", which is not the same as a key the
     /// service rejected.
     pub fn from_settings(app: &AppHandle) -> Self {
-        match crate::settings::provider_name(app).as_str() {
-            "kimi" => match crate::settings::kimi_api_key(app) {
-                key if key.is_empty() => {
-                    println!("[tonemate] kimi selected but no api key set; using bedrock");
-                    Provider::Bedrock
-                }
-                key => Provider::Kimi(key),
-            },
-            _ => Provider::Bedrock,
-        }
+        choose(
+            &crate::settings::provider_name(app),
+            &crate::settings::kimi_api_key(app),
+        )
     }
 
     /// The provider `examples/translate.rs` should use. It has no `AppHandle`,
@@ -169,4 +177,39 @@ pub async fn translate(
     // Prefixed here rather than in each transport, so every provider's failures
     // read the same way in the bar and in the log.
     result.map(|_| ()).map_err(|err| format!("{}: {err}", provider.label()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_choose_kimi_with_key() {
+        let provider = choose("kimi", "sk-test123");
+        match &provider {
+            Provider::Kimi(key) => assert_eq!(key, "sk-test123"),
+            _ => panic!("expected Kimi variant"),
+        }
+        assert_eq!(provider.label(), "kimi");
+    }
+
+    #[test]
+    fn test_choose_kimi_without_key() {
+        let provider = choose("kimi", "");
+        match provider {
+            Provider::Bedrock => (),
+            _ => panic!("expected Bedrock fallback"),
+        }
+        assert_eq!(provider.label(), "bedrock");
+    }
+
+    #[test]
+    fn test_choose_unknown_provider() {
+        let provider = choose("deepseek", "");
+        match provider {
+            Provider::Bedrock => (),
+            _ => panic!("expected Bedrock fallback"),
+        }
+        assert_eq!(provider.label(), "bedrock");
+    }
 }

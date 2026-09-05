@@ -31,7 +31,7 @@
         "title": "tonemate 设置",
         "url": "settings.html",
         "width": 480,
-        "height": 320,
+        "height": 400,
         "visible": false,
         "center": true,
         "resizable": false

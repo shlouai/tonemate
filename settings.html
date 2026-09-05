@@ -14,54 +14,102 @@
     <main>
       <h1>设置</h1>
 
-      <!-- A radio group, so ← → move between the colours and the choice reads as
-           one setting with six values rather than six switches. The swatch is
-           drawn by the label: the input itself is taken off screen rather than
-           hidden, because `display: none` would also take it out of the tab
-           order. -->
-      <fieldset id="accent">
-        <legend>输入条颜色</legend>
-        <!-- The swatches are laid out in a wrapper rather than on the fieldset
-             itself: a legend is not an ordinary child, and engines disagree about
-             what it does inside a grid. -->
-        <div class="swatches">
-          <label>
-            <input type="radio" name="accent" value="graphite" />
-            <span class="swatch" data-accent="graphite"></span>
-            石墨
-          </label>
-          <label>
-            <input type="radio" name="accent" value="indigo" />
-            <span class="swatch" data-accent="indigo"></span>
-            靛蓝
-          </label>
-          <label>
-            <input type="radio" name="accent" value="pine" />
-            <span class="swatch" data-accent="pine"></span>
-            墨绿
-          </label>
-          <label>
-            <input type="radio" name="accent" value="wine" />
-            <span class="swatch" data-accent="wine"></span>
-            酒红
-          </label>
-          <label>
-            <input type="radio" name="accent" value="violet" />
-            <span class="swatch" data-accent="violet"></span>
-            紫罗兰
-          </label>
-          <label>
-            <input type="radio" name="accent" value="amber" />
-            <span class="swatch" data-accent="amber"></span>
-            琥珀
-          </label>
-        </div>
-      </fieldset>
+      <!-- The tabs are a radio group so ← → move between them and the panel
+           switch needs no JavaScript: the inputs precede both the tab bar and
+           the panels, so `:checked ~` can reach them. Provider settings are
+           kept off the colour panel deliberately — there will be more services
+           than colours before long. -->
+      <div class="tabbed">
+        <input type="radio" name="tab" id="tab-appearance" checked />
+        <input type="radio" name="tab" id="tab-service" />
 
-      <p>
-        翻译用的 AWS profile、区域、模型和 effort 目前仍由环境变量提供 —— 见
-        README 的 Configuration 一节。
-      </p>
+        <div class="tabbar">
+          <label for="tab-appearance">外观</label>
+          <label for="tab-service">翻译服务</label>
+        </div>
+
+        <section class="panel" id="panel-appearance">
+          <!-- A radio group, so ← → move between the colours and the choice
+               reads as one setting with six values rather than six switches.
+               The swatch is drawn by the label: the input itself is taken off
+               screen rather than hidden, because `display: none` would also
+               take it out of the tab order. -->
+          <fieldset id="accent">
+            <legend>输入条颜色</legend>
+            <!-- The swatches are laid out in a wrapper rather than on the
+                 fieldset itself: a legend is not an ordinary child, and engines
+                 disagree about what it does inside a grid. -->
+            <div class="swatches">
+              <label>
+                <input type="radio" name="accent" value="graphite" />
+                <span class="swatch" data-accent="graphite"></span>
+                石墨
+              </label>
+              <label>
+                <input type="radio" name="accent" value="indigo" />
+                <span class="swatch" data-accent="indigo"></span>
+                靛蓝
+              </label>
+              <label>
+                <input type="radio" name="accent" value="pine" />
+                <span class="swatch" data-accent="pine"></span>
+                墨绿
+              </label>
+              <label>
+                <input type="radio" name="accent" value="wine" />
+                <span class="swatch" data-accent="wine"></span>
+                酒红
+              </label>
+              <label>
+                <input type="radio" name="accent" value="violet" />
+                <span class="swatch" data-accent="violet"></span>
+                紫罗兰
+              </label>
+              <label>
+                <input type="radio" name="accent" value="amber" />
+                <span class="swatch" data-accent="amber"></span>
+                琥珀
+              </label>
+            </div>
+          </fieldset>
+        </section>
+
+        <section class="panel" id="panel-service">
+          <fieldset id="provider">
+            <legend>翻译服务</legend>
+            <div class="providers">
+              <label>
+                <input type="radio" name="provider" value="bedrock" />
+                <span class="name">AWS Bedrock</span>
+                <span class="note">环境中的 AWS profile</span>
+              </label>
+              <label>
+                <input type="radio" name="provider" value="kimi" />
+                <span class="name">Kimi</span>
+                <!-- Filled in from `kimi_key_set`; the key itself never reaches
+                     this window. -->
+                <span class="note" id="kimi-state"></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="key">
+            <label for="kimi-key">Kimi API Key</label>
+            <div class="key-row">
+              <input
+                type="password"
+                id="kimi-key"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" id="kimi-clear">清除</button>
+            </div>
+            <p class="hint" id="kimi-hint"></p>
+          </div>
+
+          <p id="active"></p>
+        </section>
+      </div>
     </main>
   </body>
 </html>
