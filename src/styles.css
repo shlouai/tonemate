@@ -115,6 +115,35 @@ body {
   }
 }
 
+/* Stretched to the full row height rather than sized to the dots: the dots say
+   where to grab, the strip is what you actually have to hit. */
+#grip {
+  flex: 0 0 16px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+
+#grip:active {
+  cursor: grabbing;
+}
+
+/* 2 columns x 3 rows on a 5px lattice, drawn rather than typed: the braille
+   glyph this imitates renders at a different weight in every font. */
+#grip::before {
+  content: "";
+  width: 10px;
+  height: 15px;
+  background-image: radial-gradient(
+    circle,
+    rgba(242, 242, 247, 0.35) 1.1px,
+    transparent 1.2px
+  );
+  background-size: 5px 5px;
+}
+
 #input {
   flex: 1;
   min-width: 0;

@@ -11,6 +11,11 @@
   <body>
     <div class="bar">
       <div class="row">
+        <!-- Pointer-only handle for moving the window, so it stays out of the
+             accessibility tree: there is no keyboard way to move the bar, and a
+             control a screen reader can announce but not operate is worse than
+             none. -->
+        <div id="grip" aria-hidden="true"></div>
         <input
           id="input"
           type="text"

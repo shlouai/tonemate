@@ -12,6 +12,17 @@ window.addEventListener("DOMContentLoaded", () => {
   const input = document.querySelector<HTMLInputElement>("#input")!;
   const output = document.querySelector<HTMLDivElement>("#output")!;
   const loading = document.querySelector<HTMLDivElement>("#loading")!;
+  const grip = document.querySelector<HTMLDivElement>("#grip")!;
+
+  // The window is undecorated, so there is no title bar to drag it by — the grip
+  // is it. Preventing the default is what keeps the caret in the input: without
+  // it, pressing a plain div moves focus off the input, and you'd have to click
+  // back into the bar before typing.
+  grip.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    void appWindow.startDragging().catch(console.error);
+  });
 
   // The window is chromeless and transparent, so anything taller than it just
   // gets clipped — the window has to be told to grow with the result box.
