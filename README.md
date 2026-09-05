@@ -53,9 +53,10 @@ launching terminal:
 
 `[tonemate] bedrock warm` appears shortly after startup. That is a background
 warm-up request that pays the credential-resolution and TLS-handshake cost up
-front, so the first rendering appears around 1.8s after you press Enter and the
-full set totals 2.9-3.7s. If it fails, the log says why — usually expired SSO
-credentials.
+front — it takes 2-3s on its own, and without it that time would land on your
+first translation instead. Warm, the first rendering appears about 1.8s after you
+press Enter and the full set totals 2.9-3.7s. If it fails, the log says why —
+usually expired SSO credentials.
 
 ## Translating without the GUI
 
