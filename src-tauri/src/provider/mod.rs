@@ -184,7 +184,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_choose_kimi_with_key() {
+    fn kimi_with_a_key_uses_kimi() {
         let provider = choose("kimi", "sk-test123");
         match &provider {
             Provider::Kimi(key) => assert_eq!(key, "sk-test123"),
@@ -194,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn test_choose_kimi_without_key() {
+    fn kimi_without_a_key_falls_back_to_bedrock() {
         let provider = choose("kimi", "");
         match provider {
             Provider::Bedrock => (),
@@ -204,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_choose_unknown_provider() {
+    fn an_unknown_provider_name_uses_bedrock() {
         let provider = choose("deepseek", "");
         match provider {
             Provider::Bedrock => (),
