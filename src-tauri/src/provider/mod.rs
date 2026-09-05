@@ -4,8 +4,8 @@
 //! output quality: two providers holding their own copy would drift, and the
 //! drift would look like a model difference.
 
-pub mod bedrock;
-pub mod openai_compat;
+pub(crate) mod bedrock;
+pub(crate) mod openai_compat;
 mod sse;
 
 use tauri::AppHandle;

@@ -22,8 +22,12 @@ an install with no API key configured behaves exactly as it does today.
 
 Kimi speaks the OpenAI-compatible chat-completions protocol, which DeepSeek and
 OpenAI also speak. So the transport written here is not "the Kimi client" but
-"the OpenAI-compatible client", and adding DeepSeek or OpenAI later is a base URL,
-a model id, and a radio button — not a new transport.
+"the OpenAI-compatible client". Adding DeepSeek or OpenAI later needs no changes
+to the transport or its twelve tests, which is the valuable part — the work sits
+in the settings layer: a new key field in `Stored` and `ProviderConfig`, a new
+command and registration, `choose`'s signature and tests generalised to take
+multiple keys, `from_env` extended, and `src/settings.ts`'s panel logic expanded
+to handle another key input (eight files total).
 
 ## Out of scope
 

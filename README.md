@@ -144,8 +144,10 @@ domestic host (`api.moonshot.cn`) and an international one
 Authentication` on the other — the key string does not say which it is, so a
 `401` usually means the wrong `TONEMATE_KIMI_BASE_URL`. And `TONEMATE_KIMI_MODEL`
 should stay on `kimi-k2.6`: it is the only Kimi model whose reasoning can be
-switched off, and with reasoning on, the model spends the entire token budget
-deliberating and returns no translation at all.
+switched off. `kimi-k2.7-code` rejects `thinking: disabled` and fails
+immediately. With reasoning left on for `kimi-k2.6`, the model spends the entire
+token budget deliberating and returns no translation at all (21.6s, finish
+reason `length`, zero content).
 
 ## Building a release binary
 
