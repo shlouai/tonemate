@@ -17,7 +17,8 @@ use tauri::AppHandle;
 /// The tab-delimited line format is what lets the answer stream: each label is
 /// fixed the moment its tab arrives, so a rendering fills in character by
 /// character instead of appearing all at once at the end of the response.
-pub(crate) const SYSTEM_PROMPT: &str = "You are a translation engine. If the user's text is English, translate \
+pub(crate) const SYSTEM_PROMPT: &str =
+    "You are a translation engine. If the user's text is English, translate \
      it into natural, idiomatic Chinese; otherwise translate it into natural, idiomatic English.\n\
      Work out what the writer is doing first: what they want from the reader, how they stand in \
      relation to that reader, and how blunt the original was. Then give 3 to 5 renderings that \
@@ -43,13 +44,17 @@ const MAX_TOKENS: i32 = 4096;
 const KIMI_BASE_URL: &str = "https://api.moonshot.cn/v1";
 
 /// `kimi-k2.6` is the only Kimi model whose reasoning can be switched off;
-/// `kimi-k2.7-code` forces it on, which spends the whole budget deliberating
-/// and returns no translation.
+/// `kimi-k2.7-code` rejects `thinking: disabled` with "only type=enabled is
+/// allowed for this model", which is why it is not an option here.
 const KIMI_MODEL: &str = "kimi-k2.6";
 
 /// The service a translation goes through. An enum rather than a trait: the set
 /// is fixed at compile time and picked by a `match`, so the boxing and lifetime
 /// work an `async` trait method would need buys nothing.
+///
+/// Deliberately does not derive `Debug`, because the Kimi variant holds a live
+/// API key and a derived `Debug` would put it in any log line that formatted
+/// the value.
 pub enum Provider {
     Bedrock,
     Kimi(String),

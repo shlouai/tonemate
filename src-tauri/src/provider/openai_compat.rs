@@ -21,13 +21,17 @@ use super::sse::Decoder;
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 /// Where to send the request and what to ask for.
-pub struct Endpoint {
-    pub base_url: String,
-    pub model: String,
-    pub api_key: String,
+///
+/// Deliberately does not derive `Debug`, because `api_key` holds a live
+/// credential and a derived `Debug` would put it in any log line that formatted
+/// the value.
+pub(super) struct Endpoint {
+    pub(super) base_url: String,
+    pub(super) model: String,
+    pub(super) api_key: String,
     /// Provider-specific body fields, merged over the common ones. Kimi uses
     /// this to switch reasoning off, which it must.
-    pub extra: Value,
+    pub(super) extra: Value,
 }
 
 fn client() -> &'static reqwest::Client {
