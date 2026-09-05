@@ -64,7 +64,9 @@ body {
   max-height: 240px;
   overflow-y: auto;
   /* Lets the text be selected and copied even though these are divs rather than
-     real inputs. */
+     real inputs. Prefixed as well as not: this WebView implements only
+     `-webkit-user-select`, and drops the unprefixed property on the floor. */
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -114,6 +116,11 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   color: rgba(242, 242, 247, 0.45);
+  /* The label names the row, it isn't part of it: dragging across a rendering
+     must not pick the label up, or Cmd+C pastes "礼貌⏎译文". Prefixed because the
+     unprefixed property alone is ignored here — which is exactly how the label
+     ended up selectable. */
+  -webkit-user-select: none;
   user-select: none;
 }
 
