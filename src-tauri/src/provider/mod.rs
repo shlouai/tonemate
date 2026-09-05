@@ -5,6 +5,7 @@
 //! drift would look like a model difference.
 
 pub mod bedrock;
+mod sse;
 
 use tauri::AppHandle;
 
