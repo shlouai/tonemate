@@ -34,6 +34,12 @@ The window starts hidden — there is nothing to see until you summon it. Once
 | `Enter` | Translate, keeping the bar up to show the result |
 | `Esc` | Hide, clearing the result |
 
+tonemate lives in the menu bar and not in the Dock — its icon in the right-hand
+end of the status bar is the only part of it you can point at. Clicking it opens
+a three-item menu: summon the bar (the same thing the hotkey does), open the
+settings window, and quit. The settings window is still empty; everything under
+[Configuration](#configuration) is set through the environment for now.
+
 The result box under the input is hidden until there is something to show, then
 grows the window downwards as the renderings stream in. How many you get is the
 model's call: it reads what the input is trying to accomplish and gives 3 to 5

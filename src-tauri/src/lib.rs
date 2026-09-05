@@ -1,9 +1,14 @@
 pub mod bedrock;
 pub mod tones;
+mod tray;
 
 use std::io::Write;
 
-use tauri::{Emitter, Manager, WebviewWindow};
+use tauri::{Emitter, Manager, WebviewWindow, WindowEvent};
+
+/// Window labels, as declared in tauri.conf.json.
+pub(crate) const MAIN_WINDOW: &str = "main";
+pub(crate) const SETTINGS_WINDOW: &str = "settings";
 
 /// Translate what was typed, streaming the renderings to both the terminal and
 /// the result box under the input. The frontend doesn't await this — it just
@@ -53,7 +58,7 @@ async fn submit(window: WebviewWindow, text: String) {
 /// Show + focus, or hide. `is_visible` is the source of truth: the window
 /// starts hidden (`"visible": false` in tauri.conf.json), so the first
 /// hotkey press summons it.
-fn toggle(window: &WebviewWindow) {
+pub(crate) fn toggle(window: &WebviewWindow) {
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
         println!("[tonemate] toggle -> hidden");
@@ -72,7 +77,30 @@ pub fn run() {
         // it recognises, and a click on a plain div isn't reliably one.
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![submit])
+        // The settings window is reused rather than rebuilt, so closing it has
+        // to mean hiding it: letting the close through destroys the webview, and
+        // the next 设置… would pay to start a fresh one. Hiding also keeps this
+        // from being a way to lose the menu bar item — the app has no other
+        // window that has to stay alive.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == SETTINGS_WINDOW {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    println!("[tonemate] settings -> hidden");
+                }
+            }
+        })
         .setup(|app| {
+            // Menu bar only: the bar is summoned by a hotkey and dismissed with
+            // Esc, so a Dock icon would stand for a window that is almost never
+            // there. Set before anything is shown, or the icon flashes into the
+            // Dock on launch.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+            tray::init(app)?;
+
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{
@@ -89,7 +117,7 @@ pub fn run() {
                     .on_shortcut(hotkey, move |app, _shortcut, event| {
                         // Fires for both press and release; only act once.
                         if event.state == ShortcutState::Pressed {
-                            if let Some(window) = app.get_webview_window("main") {
+                            if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
                                 toggle(&window);
                             }
                         }

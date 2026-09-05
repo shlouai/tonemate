@@ -1,0 +1,40 @@
+/* Unlike the bar, which is a dark pane floating over whatever is behind it, this
+   is an ordinary window with a title bar — so it follows the system appearance
+   instead of forcing one. `system-ui` rather than the bar's explicit
+   -apple-system stack, for the same reason: this window should look like the
+   ones next to it. */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  /* The window isn't transparent, so the page has to paint its own background —
+     `Canvas` is the system's window colour in either appearance. */
+  background: Canvas;
+  color: CanvasText;
+}
+
+main {
+  box-sizing: border-box;
+  padding: 20px 24px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  /* Reads as explanatory text rather than as the window's content, which is what
+     it is until there are real settings above it. */
+  opacity: 0.6;
+}
