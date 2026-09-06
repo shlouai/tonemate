@@ -116,8 +116,14 @@ pub fn run() {
                     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
                 };
 
-                // SUPER is Cmd on macOS.
+                // SUPER is Cmd on macOS, the Windows key elsewhere. Windows
+                // reserves Win+Shift+Space for input-method switching, so
+                // non-macOS builds use Ctrl+Shift+Space instead.
+                #[cfg(target_os = "macos")]
                 let hotkey = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space);
+                #[cfg(not(target_os = "macos"))]
+                let hotkey =
+                    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space);
 
                 app.handle()
                     .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
@@ -132,7 +138,14 @@ pub fn run() {
                         }
                     })?;
 
-                println!("[tonemate] hotkey registered: Cmd+Shift+Space");
+                println!(
+                    "[tonemate] hotkey registered: {}",
+                    if cfg!(target_os = "macos") {
+                        "Cmd+Shift+Space"
+                    } else {
+                        "Ctrl+Shift+Space"
+                    }
+                );
             }
 
             // Off the startup path: the app is usable the moment the hotkey is
