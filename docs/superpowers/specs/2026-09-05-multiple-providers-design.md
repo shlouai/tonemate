@@ -105,7 +105,7 @@ name — written by a future version, read by this one — degrades to Bedrock. 
 tolerance `accent` already has for a colour `palette.css` no longer defines.
 
 **The key is stored in cleartext in `settings.json`,** next to `accent`, at
-`~/Library/Application Support/com.lous008.tonemate/settings.json`. Chosen over
+`~/Library/Application Support/com.tonemate.app/settings.json`. Chosen over
 the macOS Keychain for the sake of reusing the existing read/write path and
 avoiding a Keychain prompt on first save. Any process running as the user can
 read it. The file is written `0600`, which is a speed bump and not protection.

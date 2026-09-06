@@ -1957,7 +1957,7 @@ a machine, and both take effect immediately:
   revoked key would silently bill AWS forever.
 
 Both live in
-`~/Library/Application Support/com.lous008.tonemate/settings.json`, so they
+`~/Library/Application Support/com.tonemate.app/settings.json`, so they
 survive a restart. **The Kimi API key is stored there in cleartext**, readable by
 anything running as you; the file is written owner-only, which is a speed bump
 rather than protection.

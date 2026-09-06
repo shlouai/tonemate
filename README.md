@@ -1,134 +1,100 @@
 # tonemate
 
-A Spotlight-style floating input bar: hit `Cmd+Shift+Space` anywhere, type text in
-any language, press Enter, and several translations stream into a box under the
-input — the same sentence rendered in 3 to 5 different tones, each labelled, so
-you can pick the one that fits who is reading it. The direction picks itself —
-English in gets Chinese back, anything else gets English. Translation runs through
-Claude on Amazon Bedrock by default, or through Kimi, DeepSeek, or Qwen if you
-paste an API key into the settings window.
+[English](README.en.md) · 简体中文
 
-## Prerequisites
+> 按下快捷键，输入一句话，立刻得到同一句话的几种不同「语气」的翻译版本，挑最合适的那条发出去。
 
-- [Rust toolchain](https://rustup.rs) and [pnpm](https://pnpm.io)
-- Credentials for one of the two translation services:
-  - **AWS Bedrock** (the default) — credentials that can call Bedrock in the
-    configured region.
+![tonemate 演示](assets/demo.gif)
 
-  - **Kimi** — an API key from [platform.moonshot.cn](https://platform.moonshot.cn),
-    pasted into the settings window. Nothing else to install.
+## 这是什么？
 
-  - **DeepSeek** — an API key from [platform.deepseek.com](https://platform.deepseek.com),
-    pasted into the settings window. Nothing else to install.
+tonemate 是一个常驻在菜单栏（Windows / Linux 上是系统托盘）里的翻译小工具。它平时不占地方，需要时按一下快捷键，就能在你正在用的任何软件里呼出一个输入条：
 
-  - **Qwen** — an API key from [百炼 / QwenCloud](https://www.alibabacloud.com/help/en/model-studio),
-    pasted into the settings window. Nothing else to install.
+1. 输入一句话，回车；
+2. 它把这句话翻译成 3~5 个不同语气的版本，逐行「流」出来，每一行都标注了语气（直白、委婉、正式、客气……）；
+3. 根据发给谁来挑最合适的一条，点一下就能复制。
 
-## Running it
+翻译方向会自动判断：
+
+- 输入**中文** → 翻译成**英文**；
+- 输入**英文** → 翻译成**中文**；
+- 输入其他语言 → 翻译成**英文**。
+
+第一行永远是最贴近字面、最中性的版本，后面的行语气渐远，方便你对比着选。
+
+## 怎么用？
+
+### 运行
 
 ```sh
 pnpm install
 pnpm tauri dev
 ```
 
-The window starts hidden — there is nothing to see until you summon it. Once
-`[tonemate] hotkey registered: Cmd+Shift+Space` appears, the app is live:
+启动后窗口是隐藏的，只有菜单栏 / 托盘里多出一个图标。看到终端打印 `[tonemate] hotkey registered: ...` 就说明可以用了。
 
-| Key | Action |
+### 呼出输入条
+
+| 操作 | 说明 |
 | --- | --- |
-| `Cmd+Shift+Space` | Show the bar (or hide it, if it is already up) |
-| `Enter` | Translate, keeping the bar up to show the result |
-| `Esc` | Hide, clearing the result |
+| `Cmd+Shift+Space`（macOS）<br>`Ctrl+Shift+Space`（Windows / Linux） | 呼出输入条；再按一次收起 |
+| `Enter` | 翻译，输入条保持打开，下方显示结果 |
+| `Esc` | 收起并清空结果 |
 
-tonemate lives in the menu bar and not in the Dock — its icon in the right-hand
-end of the status bar is the only part of it you can point at. Clicking it opens
-a three-item menu: summon the bar (the same thing the hotkey does), open the
-settings window, and quit. The settings window has two panels: 外观 holds the
-bar's colour, and 翻译服务 picks the translation service, holds its API key, and
-holds the AWS profile Bedrock should use. Model ids and hosts are still set
-through the environment — see [Configuration](#configuration).
+### 输入、翻译、复制
 
-The result box under the input is hidden until there is something to show, then
-grows the window downwards as the renderings stream in. How many you get is the
-model's call: it reads what the input is trying to accomplish and gives 3 to 5
-renderings that genuinely differ in tone, rather than padding to a fixed count.
-The first is always the most literal. The text can be selected and copied;
-anything longer than the box scrolls. The same exchange is still logged to the
-launching terminal:
+呼出输入条后直接打字，回车翻译。结果会一行一行实时出现；**点任意一行**即可把该行（不含语气标签）复制到剪贴板。
 
+点击菜单栏 / 托盘图标会弹出一个菜单：呼出输入条、打开设置、退出。
+
+## 设置
+
+点击图标 → **设置…** 打开设置窗口，有两个面板：
+
+- **外观**：更换输入条颜色（石墨 / 靛蓝 / 墨绿 / 酒红 / 紫罗兰 / 琥珀），选完立刻生效。
+- **翻译服务**：选择翻译服务，并填上对应的密钥。
+
+## 翻译服务
+
+tonemate 默认使用 **AWS Bedrock**；你也可以在设置里切换成别的服务：
+
+| 服务 | 需要什么 |
+| --- | --- |
+| AWS Bedrock | 默认。需要本机已配置能调用 Bedrock 的 AWS 凭证 |
+| DeepSeek | 一个 API Key（[platform.deepseek.com](https://platform.deepseek.com)） |
+| Qwen | 一个 API Key（[百炼 / 阿里云 Model Studio](https://www.alibabacloud.com/help/en/model-studio)） |
+| Kimi | 一个 API Key（[platform.moonshot.cn](https://platform.moonshot.cn)） |
+
+选了 Kimi / DeepSeek / Qwen 但还没填 Key 时，会自动退回 Bedrock，并在日志里说明；如果填了 Key 但被服务拒绝，则会直接报错，而不是悄悄退回 Bedrock 继续给你计费。
+
+---
+
+## 进阶（开发者 / 深度配置）
+
+> 普通用户到这里就可以停了。下面的内容给想自己构建、或想微调模型参数的人。
+
+### 构建可执行文件
+
+```sh
+pnpm tauri build
 ```
-[tonemate] in : 我明天不能来了
-[tonemate] out:
-直白	I can't come tomorrow.
-委婉	I'm afraid I won't be able to make it tomorrow.
-正式	I regret to inform you that I will be unable to attend tomorrow.
-客气	Sorry, something's come up and I won't be able to come by tomorrow.
-冷淡	Not coming tomorrow.
-```
 
-`[tonemate] bedrock warm` — or `[tonemate] kimi warm` / `[tonemate] deepseek warm` /
-`[tonemate] qwen warm`, naming whichever service is selected — appears shortly
-after startup. That is a background warm-up request that pays the one-time setup
-cost up front, so it does not land on your first translation. On Bedrock that
-cost is credential resolution plus the TLS handshake, and takes 2-3s; Kimi,
-DeepSeek and Qwen have no credential chain to resolve, so it is just the
-handshake. If it fails, the log says why: expired SSO credentials on Bedrock, and
-on Kimi, DeepSeek or Qwen usually a rejected API key or the wrong host.
+### 命令行直接翻译（不打开图形界面）
 
-Warm, Bedrock's first rendering appears about 1.8s after you press Enter and the
-full set totals 2.9-3.7s. Kimi is comparable and often quicker — measured at
-under 1s to the first word and about 2.3s in total.
-
-## Translating without the GUI
-
-To exercise the translation path directly — useful for checking credentials or
-timing a model change:
+想绕过界面、直接测试翻译链路（比如检查凭证、或给模型切换计时）：
 
 ```sh
 cd src-tauri
 cargo run --example translate -- "今天天气不错，我们出去走走吧。"
 ```
 
-It prints the raw stream, then a `[tonemate] parsed N tones:` block listing each
-labelled rendering, then time-to-first-word and total time. It uses Bedrock
-unless `TONEMATE_KIMI_API_KEY`, `TONEMATE_DEEPSEEK_API_KEY`, or
-`TONEMATE_QWEN_API_KEY` is set, since it has no access to the settings window's
-choice:
+它会打印原始输出流、解析出的每个语气版本，以及「首字耗时 / 总耗时」。这个例子默认用 Bedrock；想指定服务，设置 `TONEMATE_KIMI_API_KEY` / `TONEMATE_DEEPSEEK_API_KEY` / `TONEMATE_QWEN_API_KEY` 其中之一即可。
 
-```sh
-TONEMATE_KIMI_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
-TONEMATE_DEEPSEEK_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
-TONEMATE_QWEN_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
-```
+### 环境变量
 
-## Configuration
+设置窗口只保存「属于使用者本人」的那几项（颜色、服务、Key、AWS Profile），并即时生效。其余全部通过环境变量配置，均为可选，未设置时使用下表默认值。
 
-The settings window holds the two choices that belong to a person rather than to
-a machine, and both take effect immediately:
-
-- **输入条颜色** — 石墨, 靛蓝, 墨绿, 酒红, 紫罗兰 or 琥珀, and the bar repaints as
-  you choose. All six are dark panes of the same lightness, because the text,
-  borders and grip drawn on them are white at some opacity; a light bar would be
-  a second theme rather than a colour.
-- **翻译服务** — AWS Bedrock, Kimi, DeepSeek, or Qwen. Choosing Kimi, DeepSeek or
-  Qwen without saving a key falls back to Bedrock and says so, since an empty key
-  means "not set up yet". A key that the service *rejects* is reported instead of
-  falling back — otherwise a revoked key would silently bill AWS forever.
-- **AWS Profile** — the profile Bedrock should use. Leave it empty and Bedrock
-  falls back to `TONEMATE_AWS_PROFILE`, then to AWS's own default chain
-  (`AWS_PROFILE`, or the `default` profile in `~/.aws/config`). Unlike the keys,
-  the profile name is not a secret, so the field shows it in full.
-
-These live in
-`~/Library/Application Support/com.lous008.tonemate/settings.json`, so they
-survive a restart. **The API keys are stored there in cleartext**, readable by
-anything running as you; the file is written owner-only, which is a speed bump
-rather than protection.
-
-Everything else is environment-only. All optional; each overrides the default
-shown.
-
-| Variable | Default | Applies to |
+| 变量 | 默认值 | 适用服务 |
 | --- | --- | --- |
 | `TONEMATE_AWS_PROFILE` | — | Bedrock |
 | `TONEMATE_AWS_REGION` | `us-west-2` | Bedrock |
@@ -136,58 +102,29 @@ shown.
 | `TONEMATE_EFFORT` | `low` | Bedrock |
 | `TONEMATE_KIMI_BASE_URL` | `https://api.moonshot.cn/v1` | Kimi |
 | `TONEMATE_KIMI_MODEL` | `kimi-k2.6` | Kimi |
-| `TONEMATE_KIMI_API_KEY` | — | the CLI example only |
 | `TONEMATE_DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | DeepSeek |
 | `TONEMATE_DEEPSEEK_MODEL` | `deepseek-chat` | DeepSeek |
-| `TONEMATE_DEEPSEEK_API_KEY` | — | the CLI example only |
 | `TONEMATE_QWEN_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Qwen |
 | `TONEMATE_QWEN_MODEL` | `qwen3.7-plus` | Qwen |
-| `TONEMATE_QWEN_API_KEY` | — | the CLI example only |
 
-Bedrock serves the Claude 5 family only through cross-region inference profiles,
-so `TONEMATE_MODEL` needs the `us.` prefix — a bare `anthropic.claude-opus-5` is
-rejected. `TONEMATE_EFFORT` set to the empty string drops the parameter from the
-request entirely, which is what lets `TONEMATE_MODEL` point at Haiku 4.5 or other
-models that reject it:
+几点要注意的：
 
-```sh
-TONEMATE_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0 TONEMATE_EFFORT= pnpm tauri dev
-```
+- **Bedrock 模型**：Bedrock 只通过跨区域推理 Profile 提供 Claude 5 系列，所以 `TONEMATE_MODEL` 需要 `us.` 前缀——裸的 `anthropic.claude-opus-5` 会被拒绝。把 `TONEMATE_EFFORT` 设为空字符串可以彻底去掉 effort 参数，从而让模型指向 Haiku 4.5 之类不接受该参数的模型：
 
-Two Kimi notes worth knowing before changing either variable. Moonshot runs a
-domestic host (`api.moonshot.cn`) and an international one
-(`api.moonshot.ai`), and a key issued for one returns `401 Invalid
-Authentication` on the other — the key string does not say which it is, so a
-`401` usually means the wrong `TONEMATE_KIMI_BASE_URL`. And `TONEMATE_KIMI_MODEL`
-should stay on `kimi-k2.6`: it is the only Kimi model whose reasoning can be
-switched off. `kimi-k2.7-code` rejects `thinking: disabled` and fails
-immediately. With reasoning left on for `kimi-k2.6`, the model spends the entire
-token budget deliberating and returns no translation at all (21.6s, finish
-reason `length`, zero content).
+  ```sh
+  TONEMATE_MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0 TONEMATE_EFFORT= pnpm tauri dev
+  ```
 
-One DeepSeek note, of the same shape: keep `TONEMATE_DEEPSEEK_MODEL` on
-`deepseek-chat`, the non-reasoning model. `deepseek-reasoner` is deliberately not
-offered — like Kimi's reasoning, it would spend the budget deliberating and
-return no translation.
+- **Kimi**：Moonshot 有国内站（`api.moonshot.cn`）和国际站（`api.moonshot.ai`），一个站发的 Key 在另一个站会返回 `401`，而 Key 本身看不出属于哪个站——所以 `401` 通常意味着 `TONEMATE_KIMI_BASE_URL` 填错了。模型请保持 `kimi-k2.6`：它是唯一能关掉推理的 Kimi 模型；`kimi-k2.7-code` 会拒绝 `thinking: disabled`，直接失败。
 
-One Qwen note, too. Qwen runs a domestic host
-(`dashscope.aliyuncs.com`) and an international one
-(`dashscope-intl.aliyuncs.com`), both under the `/compatible-mode/v1` path, and a
-key issued for one returns `401 Invalid Authentication` on the other — so a `401`
-usually means the wrong `TONEMATE_QWEN_BASE_URL`, the same shape as Kimi's two
-hosts. `TONEMATE_QWEN_MODEL` defaults to `qwen3.7-plus`, the balanced tier; the
-`flash` tier is cheaper and the `max` tier more capable if you want to trade one
-way or the other. Whatever model you pick, thinking has to stay off: Qwen 3.x
-models deliberate by default, and the app already sends `enable_thinking: false`
-because, left on, `qwen3.7-plus` spends ~21s reasoning before its first word —
-the same failure Kimi's `thinking: disabled` exists for.
+- **DeepSeek**：请保持 `deepseek-chat`（非推理模型）。`deepseek-reasoner` 是推理模型，会耗尽预算、不给翻译。
 
-## Building a release binary
+- **Qwen**：同样分国内站（`dashscope.aliyuncs.com`）和国际站（`dashscope-intl.aliyuncs.com`），Key 用错站会 `401`。模型默认 `qwen3.7-plus`；无论选哪个，思考都要关掉（应用已发 `enable_thinking: false`），否则会先推理约 21 秒。
 
-```sh
-pnpm tauri build
-```
+### 设置存到哪了？
 
-## Recommended IDE setup
+设置保存在 `~/Library/Application Support/com.tonemate.app/settings.json`（Windows 在 `%APPDATA%\com.tonemate.app\settings.json`，Linux 在 `~/.config/com.tonemate.app/settings.json`），重启后依然生效。**API Key 以明文存在这个文件里**，任何以你身份运行的程序都能读到；文件被写成仅属主可读，但这只是「减速带」，不是真正的保护。
+
+### 推荐 IDE
 
 [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
