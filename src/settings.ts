@@ -183,6 +183,15 @@ async function wireProvider() {
     renderKey("qwen", config.qwen_key_set,
       "在百炼 / QwenCloud 获取。国际站的 key 需要设置 TONEMATE_QWEN_BASE_URL。");
 
+    // Only the chosen provider's field is shown. Four boxes asking for four
+    // different keys at once read as clutter, and a key typed into a provider
+    // that is not selected is not what anyone means — the radio has already
+    // picked the service, so its field is the only one worth showing. The `hidden`
+    // attribute (not a class) also takes the field out of the tab order.
+    for (const field of document.querySelectorAll<HTMLElement>(".key")) {
+      field.hidden = field.dataset.provider !== config.provider;
+    }
+
     // Says what will actually happen on the next translation, which is not
     // always what is ticked: a provider without a key falls back to Bedrock,
     // and saying so here is cheaper than letting the log be the only place it
