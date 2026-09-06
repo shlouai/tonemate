@@ -29,6 +29,10 @@ pub(super) struct Endpoint {
     pub(super) base_url: String,
     pub(super) model: String,
     pub(super) api_key: String,
+    /// Which JSON key caps the output budget. Moonshot renamed `max_tokens` to
+    /// `max_completion_tokens`; DeepSeek still documents only `max_tokens`, so
+    /// the two cannot share a spelling.
+    pub(super) max_tokens_field: &'static str,
     /// Provider-specific body fields, merged over the common ones. Kimi uses
     /// this to switch reasoning off, which it must.
     pub(super) extra: Value,
@@ -51,13 +55,18 @@ pub(super) async fn converse(
     let mut body = json!({
         "model": endpoint.model,
         "stream": true,
-        // `max_tokens` is deprecated by Moonshot in favour of this.
-        "max_completion_tokens": max_tokens,
         "messages": [
             { "role": "system", "content": system_prompt },
             { "role": "user", "content": text },
         ],
     });
+
+    // The cap's key is per-provider, so it is set by field rather than spelled
+    // in the macro above: Moonshot wants `max_completion_tokens`, DeepSeek wants
+    // `max_tokens`.
+    if let Some(target) = body.as_object_mut() {
+        target.insert(endpoint.max_tokens_field.to_string(), json!(max_tokens));
+    }
 
     // Merged rather than nested, so a provider can also override a common field
     // if it ever needs to.

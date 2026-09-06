@@ -33,12 +33,13 @@ const FILE: &str = "settings.json";
 #[serde(default)]
 struct Stored {
     accent: String,
-    /// `"bedrock"` or `"kimi"`. A string rather than an enum so a name written
-    /// by a later version survives a round trip through this one instead of
-    /// taking the whole file down with it.
+    /// `"bedrock"`, `"kimi"`, or `"deepseek"`. A string rather than an enum so a
+    /// name written by a later version survives a round trip through this one
+    /// instead of taking the whole file down with it.
     provider: String,
     /// Empty means unset, which is what sends translation back to Bedrock.
     kimi_api_key: String,
+    deepseek_api_key: String,
 }
 
 /// The accent the bar should be painted in.
@@ -72,6 +73,7 @@ pub fn set_accent(app: AppHandle, accent: String) -> Result<(), String> {
 pub struct ProviderConfig {
     pub provider: String,
     pub kimi_key_set: bool,
+    pub deepseek_key_set: bool,
 }
 
 #[tauri::command]
@@ -80,6 +82,7 @@ pub fn provider_config(app: AppHandle) -> ProviderConfig {
     ProviderConfig {
         provider: stored.provider,
         kimi_key_set: !stored.kimi_api_key.is_empty(),
+        deepseek_key_set: !stored.deepseek_api_key.is_empty(),
     }
 }
 
@@ -135,6 +138,33 @@ pub fn set_kimi_api_key(app: AppHandle, key: String) -> Result<(), String> {
     Ok(())
 }
 
+/// The DeepSeek twin of `set_kimi_api_key`, down to the empty-clears semantics
+/// and the spawned warm-up. Kept separate rather than generalised: the two names
+/// are read as "Kimi's key" and "DeepSeek's key" in the settings window, and a
+/// single parameterised command would just move that naming somewhere less
+/// obvious.
+#[tauri::command]
+pub fn set_deepseek_api_key(app: AppHandle, key: String) -> Result<(), String> {
+    let key = key.trim().to_string();
+    let set = !key.is_empty();
+    update(&app, |stored| stored.deepseek_api_key = key.clone())?;
+    println!(
+        "[tonemate] deepseek api key -> {}",
+        if set { "set" } else { "cleared" }
+    );
+
+    let warm_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let chosen = crate::provider::Provider::from_settings(&warm_handle);
+        match crate::provider::warm(&chosen).await {
+            Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+            Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
+        }
+    });
+
+    Ok(())
+}
+
 /// The chosen provider's name, for `Provider::from_settings`.
 pub fn provider_name(app: &AppHandle) -> String {
     load(app).provider
@@ -143,6 +173,11 @@ pub fn provider_name(app: &AppHandle) -> String {
 /// The stored Kimi key, or an empty string when there is none.
 pub fn kimi_api_key(app: &AppHandle) -> String {
     load(app).kimi_api_key
+}
+
+/// The stored DeepSeek key, or an empty string when there is none.
+pub fn deepseek_api_key(app: &AppHandle) -> String {
+    load(app).deepseek_api_key
 }
 
 fn file(app: &AppHandle) -> Option<PathBuf> {
@@ -172,6 +207,7 @@ fn defaults() -> Stored {
         accent: DEFAULT_ACCENT.to_string(),
         provider: DEFAULT_PROVIDER.to_string(),
         kimi_api_key: String::new(),
+        deepseek_api_key: String::new(),
     }
 }
 
@@ -232,6 +268,7 @@ mod tests {
         assert_eq!(stored.accent, DEFAULT_ACCENT);
         assert_eq!(stored.provider, DEFAULT_PROVIDER);
         assert_eq!(stored.kimi_api_key, "");
+        assert_eq!(stored.deepseek_api_key, "");
     }
 
     #[test]
@@ -241,15 +278,17 @@ mod tests {
             &file,
             &Stored {
                 accent: "indigo".to_string(),
-                provider: "kimi".to_string(),
+                provider: "deepseek".to_string(),
                 kimi_api_key: "sk-example".to_string(),
+                deepseek_api_key: "sk-deepseek".to_string(),
             },
         )
         .unwrap();
         let stored = read(&file);
         assert_eq!(stored.accent, "indigo");
-        assert_eq!(stored.provider, "kimi");
+        assert_eq!(stored.provider, "deepseek");
         assert_eq!(stored.kimi_api_key, "sk-example");
+        assert_eq!(stored.deepseek_api_key, "sk-deepseek");
         let _ = fs::remove_file(&file);
     }
 
@@ -273,6 +312,7 @@ mod tests {
         assert_eq!(stored.accent, "wine");
         assert_eq!(stored.provider, DEFAULT_PROVIDER);
         assert_eq!(stored.kimi_api_key, "");
+        assert_eq!(stored.deepseek_api_key, "");
         let _ = fs::remove_file(&file);
     }
 
@@ -281,8 +321,8 @@ mod tests {
     #[test]
     fn an_unknown_provider_name_is_kept_verbatim() {
         let file = scratch("unknown-provider");
-        fs::write(&file, r#"{"accent":"pine","provider":"deepseek"}"#).unwrap();
-        assert_eq!(read(&file).provider, "deepseek");
+        fs::write(&file, r#"{"accent":"pine","provider":"openai"}"#).unwrap();
+        assert_eq!(read(&file).provider, "openai");
         let _ = fs::remove_file(&file);
     }
 

@@ -142,6 +142,16 @@ const KIMI_BASE_URL: &str = "https://api.moonshot.cn/v1";
 /// allowed for this model", which is why it is not an option here.
 const KIMI_MODEL: &str = "kimi-k2.6";
 
+/// DeepSeek's host. The `/v1` suffix is optional in their docs but kept to
+/// match Kimi's shape and the `/chat/completions` the transport appends.
+const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
+
+/// `deepseek-chat` is the non-reasoning model. `deepseek-reasoner` is a
+/// reasoning model, and is deliberately not an option here for the same reason
+/// Kimi's reasoning is switched off: it would spend the whole budget deliberating
+/// and return no translation.
+const DEEPSEEK_MODEL: &str = "deepseek-chat";
+
 /// The service a translation goes through. An enum rather than a trait: the set
 /// is fixed at compile time and picked by a `match`, so the boxing and lifetime
 /// work an `async` trait method would need buys nothing.
@@ -152,18 +162,24 @@ const KIMI_MODEL: &str = "kimi-k2.6";
 pub enum Provider {
     Bedrock,
     Kimi(String),
+    DeepSeek(String),
 }
 
 /// Which provider a stored setting pair means. Split out from `from_settings`
 /// so the fallback rule can be tested: an `AppHandle` cannot be built in a
 /// unit test, and this rule is the one the user notices when it is wrong.
-fn choose(provider: &str, kimi_key: &str) -> Provider {
+fn choose(provider: &str, kimi_key: &str, deepseek_key: &str) -> Provider {
     match provider {
         "kimi" if kimi_key.is_empty() => {
             println!("[tonemate] kimi selected but no api key set; using bedrock");
             Provider::Bedrock
         }
         "kimi" => Provider::Kimi(kimi_key.to_string()),
+        "deepseek" if deepseek_key.is_empty() => {
+            println!("[tonemate] deepseek selected but no api key set; using bedrock");
+            Provider::Bedrock
+        }
+        "deepseek" => Provider::DeepSeek(deepseek_key.to_string()),
         "bedrock" => Provider::Bedrock,
         _ => {
             println!("[tonemate] unrecognised provider \"{provider}\"; using bedrock");
@@ -184,6 +200,7 @@ impl Provider {
         choose(
             &crate::settings::provider_name(app),
             &crate::settings::kimi_api_key(app),
+            &crate::settings::deepseek_api_key(app),
         )
     }
 
@@ -192,7 +209,10 @@ impl Provider {
     pub fn from_env() -> Self {
         match std::env::var("TONEMATE_KIMI_API_KEY") {
             Ok(key) if !key.is_empty() => Provider::Kimi(key),
-            _ => Provider::Bedrock,
+            _ => match std::env::var("TONEMATE_DEEPSEEK_API_KEY") {
+                Ok(key) if !key.is_empty() => Provider::DeepSeek(key),
+                _ => Provider::Bedrock,
+            },
         }
     }
 
@@ -202,6 +222,7 @@ impl Provider {
         match self {
             Provider::Bedrock => "bedrock",
             Provider::Kimi(_) => "kimi",
+            Provider::DeepSeek(_) => "deepseek",
         }
     }
 
@@ -216,7 +237,20 @@ impl Provider {
             base_url: env_or("TONEMATE_KIMI_BASE_URL", KIMI_BASE_URL),
             model: env_or("TONEMATE_KIMI_MODEL", KIMI_MODEL),
             api_key: key.to_string(),
+            max_tokens_field: "max_completion_tokens",
             extra: serde_json::json!({ "thinking": { "type": "disabled" } }),
+        }
+    }
+
+    /// Where a DeepSeek request goes and what it asks for. `extra` is empty:
+    /// `deepseek-chat` is non-reasoning, so there is no `thinking` to switch off.
+    fn deepseek_endpoint(key: &str) -> openai_compat::Endpoint {
+        openai_compat::Endpoint {
+            base_url: env_or("TONEMATE_DEEPSEEK_BASE_URL", DEEPSEEK_BASE_URL),
+            model: env_or("TONEMATE_DEEPSEEK_MODEL", DEEPSEEK_MODEL),
+            api_key: key.to_string(),
+            max_tokens_field: "max_tokens",
+            extra: serde_json::json!({}),
         }
     }
 }
@@ -259,6 +293,21 @@ pub async fn warm(provider: &Provider) -> Result<(), String> {
                 Err(err) => Err(err),
             }
         }
+        Provider::DeepSeek(key) => {
+            match openai_compat::converse(
+                &Provider::deepseek_endpoint(key),
+                &prompt_for("hi"),
+                "hi",
+                1,
+                |_| {},
+            )
+            .await
+            {
+                Ok(_) => Ok(()),
+                Err(err) if err.starts_with("model returned no text") => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
     };
 
     result.map_err(|err| format!("{}: {err}", provider.label()))
@@ -281,6 +330,16 @@ pub async fn translate(
             )
             .await
         }
+        Provider::DeepSeek(key) => {
+            openai_compat::converse(
+                &Provider::deepseek_endpoint(key),
+                &prompt_for(text),
+                text,
+                MAX_TOKENS as u32,
+                on_delta,
+            )
+            .await
+        }
     };
 
     // Prefixed here rather than in each transport, so every provider's failures
@@ -296,7 +355,7 @@ mod tests {
 
     #[test]
     fn kimi_with_a_key_uses_kimi() {
-        let provider = choose("kimi", "sk-test123");
+        let provider = choose("kimi", "sk-test123", "");
         match &provider {
             Provider::Kimi(key) => assert_eq!(key, "sk-test123"),
             _ => panic!("expected Kimi variant"),
@@ -306,7 +365,27 @@ mod tests {
 
     #[test]
     fn kimi_without_a_key_falls_back_to_bedrock() {
-        let provider = choose("kimi", "");
+        let provider = choose("kimi", "", "");
+        match provider {
+            Provider::Bedrock => (),
+            _ => panic!("expected Bedrock fallback"),
+        }
+        assert_eq!(provider.label(), "bedrock");
+    }
+
+    #[test]
+    fn deepseek_with_a_key_uses_deepseek() {
+        let provider = choose("deepseek", "", "sk-test456");
+        match &provider {
+            Provider::DeepSeek(key) => assert_eq!(key, "sk-test456"),
+            _ => panic!("expected DeepSeek variant"),
+        }
+        assert_eq!(provider.label(), "deepseek");
+    }
+
+    #[test]
+    fn deepseek_without_a_key_falls_back_to_bedrock() {
+        let provider = choose("deepseek", "", "");
         match provider {
             Provider::Bedrock => (),
             _ => panic!("expected Bedrock fallback"),
@@ -316,7 +395,7 @@ mod tests {
 
     #[test]
     fn an_unknown_provider_name_uses_bedrock() {
-        let provider = choose("deepseek", "");
+        let provider = choose("openai", "", "");
         match provider {
             Provider::Bedrock => (),
             _ => panic!("expected Bedrock fallback"),

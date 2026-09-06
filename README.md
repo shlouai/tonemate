@@ -5,8 +5,8 @@ any language, press Enter, and several translations stream into a box under the
 input — the same sentence rendered in 3 to 5 different tones, each labelled, so
 you can pick the one that fits who is reading it. The direction picks itself —
 English in gets Chinese back, anything else gets English. Translation runs through
-Claude on Amazon Bedrock by default, or through Kimi if you paste an API key into
-the settings window.
+Claude on Amazon Bedrock by default, or through Kimi or DeepSeek if you paste an
+API key into the settings window.
 
 ## Prerequisites
 
@@ -21,6 +21,9 @@ the settings window.
     ```
 
   - **Kimi** — an API key from [platform.moonshot.cn](https://platform.moonshot.cn),
+    pasted into the settings window. Nothing else to install.
+
+  - **DeepSeek** — an API key from [platform.deepseek.com](https://platform.deepseek.com),
     pasted into the settings window. Nothing else to install.
 
 ## Running it
@@ -65,13 +68,14 @@ launching terminal:
 冷淡	Not coming tomorrow.
 ```
 
-`[tonemate] bedrock warm` — or `[tonemate] kimi warm`, naming whichever service is
-selected — appears shortly after startup. That is a background warm-up request
-that pays the one-time setup cost up front, so it does not land on your first
-translation. On Bedrock that cost is credential resolution plus the TLS
-handshake, and takes 2-3s; Kimi has no credential chain to resolve, so it is just
-the handshake. If it fails, the log says why: expired SSO credentials on Bedrock,
-and on Kimi usually a rejected API key or the wrong host.
+`[tonemate] bedrock warm` — or `[tonemate] kimi warm` / `[tonemate] deepseek warm`,
+naming whichever service is selected — appears shortly after startup. That is a
+background warm-up request that pays the one-time setup cost up front, so it does
+not land on your first translation. On Bedrock that cost is credential resolution
+plus the TLS handshake, and takes 2-3s; Kimi and DeepSeek have no credential chain
+to resolve, so it is just the handshake. If it fails, the log says why: expired
+SSO credentials on Bedrock, and on Kimi or DeepSeek usually a rejected API key or
+the wrong host.
 
 Warm, Bedrock's first rendering appears about 1.8s after you press Enter and the
 full set totals 2.9-3.7s. Kimi is comparable and often quicker — measured at
@@ -89,11 +93,12 @@ cargo run --example translate -- "今天天气不错，我们出去走走吧。"
 
 It prints the raw stream, then a `[tonemate] parsed N tones:` block listing each
 labelled rendering, then time-to-first-word and total time. It uses Bedrock
-unless `TONEMATE_KIMI_API_KEY` is set, since it has no access to the settings
-window's choice:
+unless `TONEMATE_KIMI_API_KEY` or `TONEMATE_DEEPSEEK_API_KEY` is set, since it has
+no access to the settings window's choice:
 
 ```sh
 TONEMATE_KIMI_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
+TONEMATE_DEEPSEEK_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
 ```
 
 ## Configuration
@@ -105,10 +110,10 @@ a machine, and both take effect immediately:
   you choose. All six are dark panes of the same lightness, because the text,
   borders and grip drawn on them are white at some opacity; a light bar would be
   a second theme rather than a colour.
-- **翻译服务** — AWS Bedrock or Kimi. Choosing Kimi without saving a key falls
-  back to Bedrock and says so, since an empty key means "not set up yet". A key
-  that the service *rejects* is reported instead of falling back — otherwise a
-  revoked key would silently bill AWS forever.
+- **翻译服务** — AWS Bedrock, Kimi, or DeepSeek. Choosing Kimi or DeepSeek
+  without saving a key falls back to Bedrock and says so, since an empty key
+  means "not set up yet". A key that the service *rejects* is reported instead of
+  falling back — otherwise a revoked key would silently bill AWS forever.
 
 Both live in
 `~/Library/Application Support/com.lous008.tonemate/settings.json`, so they
@@ -128,6 +133,9 @@ shown.
 | `TONEMATE_KIMI_BASE_URL` | `https://api.moonshot.cn/v1` | Kimi |
 | `TONEMATE_KIMI_MODEL` | `kimi-k2.6` | Kimi |
 | `TONEMATE_KIMI_API_KEY` | — | the CLI example only |
+| `TONEMATE_DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | DeepSeek |
+| `TONEMATE_DEEPSEEK_MODEL` | `deepseek-chat` | DeepSeek |
+| `TONEMATE_DEEPSEEK_API_KEY` | — | the CLI example only |
 
 Bedrock serves the Claude 5 family only through cross-region inference profiles,
 so `TONEMATE_MODEL` needs the `us.` prefix — a bare `anthropic.claude-opus-5` is
@@ -149,6 +157,11 @@ switched off. `kimi-k2.7-code` rejects `thinking: disabled` and fails
 immediately. With reasoning left on for `kimi-k2.6`, the model spends the entire
 token budget deliberating and returns no translation at all (21.6s, finish
 reason `length`, zero content).
+
+One DeepSeek note, of the same shape: keep `TONEMATE_DEEPSEEK_MODEL` on
+`deepseek-chat`, the non-reasoning model. `deepseek-reasoner` is deliberately not
+offered — like Kimi's reasoning, it would spend the budget deliberating and
+return no translation.
 
 ## Building a release binary
 

@@ -276,7 +276,9 @@ p {
   gap: 8px;
 }
 
-#kimi-key {
+/* Scoped to the row rather than to either id, so the Kimi and DeepSeek fields
+   share one definition. */
+.key-row input {
   flex: 1 1 auto;
   min-width: 0;
   box-sizing: border-box;
@@ -285,7 +287,7 @@ p {
   font-size: 13px;
 }
 
-#kimi-clear {
+.key-row button {
   flex: 0 0 auto;
   font: inherit;
   font-size: 13px;

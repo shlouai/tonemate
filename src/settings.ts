@@ -4,7 +4,11 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 const appWindow = getCurrentWindow();
 
 /** What Rust will say about the translation service. Never the key itself. */
-type ProviderConfig = { provider: string; kimi_key_set: boolean };
+type ProviderConfig = {
+  provider: string;
+  kimi_key_set: boolean;
+  deepseek_key_set: boolean;
+};
 
 window.addEventListener("DOMContentLoaded", () => {
   wireAccent();
@@ -41,15 +45,17 @@ async function wireProvider() {
   const radios = document.querySelectorAll<HTMLInputElement>(
     '#provider input[name="provider"]',
   );
-  const keyInput = document.querySelector<HTMLInputElement>("#kimi-key");
-  const clearButton = document.querySelector<HTMLButtonElement>("#kimi-clear");
 
   let config = await invoke<ProviderConfig>("provider_config").catch(
     (error): ProviderConfig => {
       console.error(error);
       // Bedrock needs nothing configured, so it is the safe thing to show when
       // the question could not be asked.
-      return { provider: "bedrock", kimi_key_set: false };
+      return {
+        provider: "bedrock",
+        kimi_key_set: false,
+        deepseek_key_set: false,
+      };
     },
   );
 
@@ -74,48 +80,59 @@ async function wireProvider() {
     });
   }
 
-  if (!keyInput || !clearButton) return;
+  wireKeyField("kimi", "set_kimi_api_key", (set) => {
+    config = { ...config, kimi_key_set: set };
+    render();
+  });
+  wireKeyField("deepseek", "set_deepseek_api_key", (set) => {
+    config = { ...config, deepseek_key_set: set };
+    render();
+  });
 
   // On `change`, so the key is sent on blur or Enter rather than on every
   // keystroke — a key is pasted, not typed, and each save writes the file and
-  // spends a warm-up request.
-  //
-  // An empty field means "unchanged", not "clear": the stored key is never sent
-  // to this window, so an empty box is what a configured key looks like here.
-  // Clearing is the button's job alone.
-  keyInput.addEventListener("change", () => {
-    const key = keyInput.value.trim();
-    if (!key) return;
-    void invoke("set_kimi_api_key", { key })
-      .then(() => {
-        keyInput.value = "";
-        config = { ...config, kimi_key_set: true };
-        render();
-      })
-      .catch((error) => {
-        console.error(error);
-        // The optimistic version was wrong: this window is created once and
-        // never re-reads from settings, so painting a lie here persists for
-        // the whole session. Repaint from the config the backend agrees with.
-        render();
-      });
-  });
+  // spends a warm-up request. An empty field means "unchanged", not "clear":
+  // the stored key is never sent to this window, so an empty box is what a
+  // configured key looks like here. Clearing is the button's job alone.
+  function wireKeyField(
+    prefix: "kimi" | "deepseek",
+    command: "set_kimi_api_key" | "set_deepseek_api_key",
+    applied: (set: boolean) => void,
+  ) {
+    const keyInput = document.querySelector<HTMLInputElement>(`#${prefix}-key`);
+    const clearButton = document.querySelector<HTMLButtonElement>(
+      `#${prefix}-clear`,
+    );
+    if (!keyInput || !clearButton) return;
 
-  clearButton.addEventListener("click", () => {
-    void invoke("set_kimi_api_key", { key: "" })
-      .then(() => {
-        keyInput.value = "";
-        config = { ...config, kimi_key_set: false };
-        render();
-      })
-      .catch((error) => {
-        console.error(error);
-        // The optimistic version was wrong: this window is created once and
-        // never re-reads from settings, so painting a lie here persists for
-        // the whole session. Repaint from the config the backend agrees with.
-        render();
-      });
-  });
+    keyInput.addEventListener("change", () => {
+      const key = keyInput.value.trim();
+      if (!key) return;
+      void invoke(command, { key })
+        .then(() => {
+          keyInput.value = "";
+          applied(true);
+        })
+        .catch((error) => {
+          console.error(error);
+          // The optimistic version was wrong: repaint from what the backend
+          // actually kept.
+          render();
+        });
+    });
+
+    clearButton.addEventListener("click", () => {
+      void invoke(command, { key: "" })
+        .then(() => {
+          keyInput.value = "";
+          applied(false);
+        })
+        .catch((error) => {
+          console.error(error);
+          render();
+        });
+    });
+  }
 
   function render() {
     for (const radio of radios) radio.checked = radio.value === config.provider;
@@ -124,28 +141,50 @@ async function wireProvider() {
     // configured key looks like. A placeholder of masked dots stands in for the
     // hidden key so the box does not read as "nothing saved" while the state
     // beside it says "已配置".
-    if (keyInput)
-      keyInput.placeholder = config.kimi_key_set ? "••••••••" : "";
-
-    const state = document.querySelector<HTMLElement>("#kimi-state");
-    if (state) state.textContent = config.kimi_key_set ? "已配置" : "未配置";
-
-    const hint = document.querySelector<HTMLElement>("#kimi-hint");
-    if (hint)
-      hint.textContent = config.kimi_key_set
-        ? "已保存。输入新的 key 可替换,或点「清除」删除。"
-        : "在 platform.moonshot.cn 获取。国际站的 key 需要设置 TONEMATE_KIMI_BASE_URL。";
+    renderKey("kimi", config.kimi_key_set,
+      "在 platform.moonshot.cn 获取。国际站的 key 需要设置 TONEMATE_KIMI_BASE_URL。");
+    renderKey("deepseek", config.deepseek_key_set,
+      "在 platform.deepseek.com 获取。");
 
     // Says what will actually happen on the next translation, which is not
-    // always what is ticked: Kimi without a key falls back to Bedrock, and
-    // saying so here is cheaper than letting the log be the only place it shows.
+    // always what is ticked: a provider without a key falls back to Bedrock,
+    // and saying so here is cheaper than letting the log be the only place it
+    // shows.
     const active = document.querySelector<HTMLElement>("#active");
-    if (active)
-      active.textContent =
-        config.provider === "kimi" && !config.kimi_key_set
-          ? "当前使用: AWS Bedrock —— 已选 Kimi 但未填 API Key"
-          : `当前使用: ${config.provider === "kimi" ? "Kimi" : "AWS Bedrock"}`;
+    if (active) {
+      const name =
+        config.provider === "kimi" ? "Kimi"
+        : config.provider === "deepseek" ? "DeepSeek"
+        : "AWS Bedrock";
+      const keySet =
+        config.provider === "kimi" ? config.kimi_key_set
+        : config.provider === "deepseek" ? config.deepseek_key_set
+        : true;
+      active.textContent = keySet
+        ? `当前使用: ${name}`
+        : `当前使用: AWS Bedrock —— 已选 ${name} 但未填 API Key`;
+    }
   }
+}
+
+/** Paints one provider's key row — placeholder, "已配置" state, and hint — from
+    the boolean Rust sends instead of the key itself. */
+function renderKey(
+  prefix: "kimi" | "deepseek",
+  keySet: boolean,
+  emptyHint: string,
+) {
+  const keyInput = document.querySelector<HTMLInputElement>(`#${prefix}-key`);
+  if (keyInput) keyInput.placeholder = keySet ? "••••••••" : "";
+
+  const state = document.querySelector<HTMLElement>(`#${prefix}-state`);
+  if (state) state.textContent = keySet ? "已配置" : "未配置";
+
+  const hint = document.querySelector<HTMLElement>(`#${prefix}-hint`);
+  if (hint)
+    hint.textContent = keySet
+      ? "已保存。输入新的 key 可替换,或点「清除」删除。"
+      : emptyHint;
 }
 
 // Esc closes the window, which for this one means hiding it — Rust turns every
