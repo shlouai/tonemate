@@ -22,9 +22,30 @@ The direction is detected automatically:
 
 The first line is always the most literal, most neutral rendering; later lines move further from it in tone, so you can compare and choose.
 
+## Install
+
+Download the latest release (currently v0.1.0) from [Releases](https://github.com/shlouai/tonemate/releases):
+
+| Platform | Package | Notes |
+| --- | --- | --- |
+| macOS | `tonemate_0.1.0_universal.dmg` | Open the DMG and drag tonemate into Applications |
+| macOS (no install) | `tonemate_0.1.0_universal.app.zip` | Unzip and run tonemate.app directly |
+| Windows | `tonemate_0.1.0_x64-setup.exe` | Run the installer, then launch from the Start menu / desktop |
+| Windows (portable) | `tonemate_0.1.0_x64_portable.zip` | Unzip and double-click tonemate.exe |
+
+The macOS build is a universal binary (Intel + Apple Silicon); the Windows build relies on the WebView2 runtime, which ships with Windows 10/11.
+
+> **First launch on macOS**: the app is unsigned, so Gatekeeper blocks it. Right-click the app → **Open**, or approve it under **System Settings → Privacy & Security → Open Anyway**.
+
+A `SHA256SUMS.txt` with checksums is included in the release for verifying downloads.
+
+The window starts hidden — only a new icon appears in the menu bar / tray. Press the shortcut to summon the bar (see below).
+
 ## How to use it
 
-### Run it
+### Run from source (developers)
+
+To run from source instead of the packaged build:
 
 ```sh
 pnpm install

@@ -22,9 +22,30 @@ tonemate 是一个常驻在菜单栏（Windows / Linux 上是系统托盘）里�
 
 第一行永远是最贴近字面、最中性的版本，后面的行语气渐远，方便你对比着选。
 
+## 安装
+
+从 [Releases](https://github.com/shlouai/tonemate/releases) 下载最新版（当前 v0.1.0）：
+
+| 平台 | 安装包 | 说明 |
+| --- | --- | --- |
+| macOS | `tonemate_0.1.0_universal.dmg` | 双击 DMG，把 tonemate 拖进「应用程序」 |
+| macOS（免安装） | `tonemate_0.1.0_universal.app.zip` | 解压后直接运行 tonemate.app |
+| Windows | `tonemate_0.1.0_x64-setup.exe` | 运行安装程序，装好后从开始菜单 / 桌面启动 |
+| Windows（绿色版） | `tonemate_0.1.0_x64_portable.zip` | 解压后双击 tonemate.exe 即用 |
+
+macOS 的 universal 包同时支持 Intel 和 Apple Silicon；Windows 版本依赖 WebView2 运行时（Win10/11 一般已随 Edge 预装）。
+
+> **macOS 首次打开**：应用未签名，Gatekeeper 会拦截。右键点 app →「打开」，或在「系统设置 → 隐私与安全性」里点「仍要打开」，之后即可正常启动。
+
+release 里附带了 `SHA256SUMS.txt`，可用于校验下载完整性。
+
+启动后窗口是隐藏的，只有菜单栏 / 托盘里多出一个图标——按下快捷键即可呼出输入条（见下一节）。
+
 ## 怎么用？
 
-### 运行
+### 从源码运行（开发者）
+
+想自己改代码、从源码跑，而不是用上面的安装包：
 
 ```sh
 pnpm install
