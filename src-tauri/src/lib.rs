@@ -74,6 +74,16 @@ pub(crate) fn toggle(window: &WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // A global-hotkey + tray app is single-instance by nature: a second
+        // launch would fight the first over the same hotkey and crash in setup
+        // ("HotKey already registered"). This plugin exits the second instance
+        // and lets us bring the first one's bar forward instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         // Copying a rendering goes through the native pasteboard rather than
         // `navigator.clipboard`: WebKit refuses that one outside a user gesture
         // it recognises, and a click on a plain div isn't reliably one.
