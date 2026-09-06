@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:mac": "RUSTFLAGS=\"--remap-path-prefix=$HOME=/build\" tauri build --target universal-apple-darwin --bundles app,dmg"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
