@@ -120,6 +120,13 @@ async function wireProvider() {
   function render() {
     for (const radio of radios) radio.checked = radio.value === config.provider;
 
+    // The key itself never reaches this window, so an empty field is what a
+    // configured key looks like. A placeholder of masked dots stands in for the
+    // hidden key so the box does not read as "nothing saved" while the state
+    // beside it says "已配置".
+    if (keyInput)
+      keyInput.placeholder = config.kimi_key_set ? "••••••••" : "";
+
     const state = document.querySelector<HTMLElement>("#kimi-state");
     if (state) state.textContent = config.kimi_key_set ? "已配置" : "未配置";
 
