@@ -160,7 +160,7 @@ const DEEPSEEK_MODEL: &str = "deepseek-chat";
 /// API key and a derived `Debug` would put it in any log line that formatted
 /// the value.
 pub enum Provider {
-    Bedrock,
+    Bedrock(String),
     Kimi(String),
     DeepSeek(String),
 }
@@ -168,22 +168,22 @@ pub enum Provider {
 /// Which provider a stored setting pair means. Split out from `from_settings`
 /// so the fallback rule can be tested: an `AppHandle` cannot be built in a
 /// unit test, and this rule is the one the user notices when it is wrong.
-fn choose(provider: &str, kimi_key: &str, deepseek_key: &str) -> Provider {
+fn choose(provider: &str, kimi_key: &str, deepseek_key: &str, aws_profile: &str) -> Provider {
     match provider {
         "kimi" if kimi_key.is_empty() => {
             println!("[tonemate] kimi selected but no api key set; using bedrock");
-            Provider::Bedrock
+            Provider::Bedrock(aws_profile.to_string())
         }
         "kimi" => Provider::Kimi(kimi_key.to_string()),
         "deepseek" if deepseek_key.is_empty() => {
             println!("[tonemate] deepseek selected but no api key set; using bedrock");
-            Provider::Bedrock
+            Provider::Bedrock(aws_profile.to_string())
         }
         "deepseek" => Provider::DeepSeek(deepseek_key.to_string()),
-        "bedrock" => Provider::Bedrock,
+        "bedrock" => Provider::Bedrock(aws_profile.to_string()),
         _ => {
             println!("[tonemate] unrecognised provider \"{provider}\"; using bedrock");
-            Provider::Bedrock
+            Provider::Bedrock(aws_profile.to_string())
         }
     }
 }
@@ -201,6 +201,7 @@ impl Provider {
             &crate::settings::provider_name(app),
             &crate::settings::kimi_api_key(app),
             &crate::settings::deepseek_api_key(app),
+            &crate::settings::aws_profile(app),
         )
     }
 
@@ -211,7 +212,7 @@ impl Provider {
             Ok(key) if !key.is_empty() => Provider::Kimi(key),
             _ => match std::env::var("TONEMATE_DEEPSEEK_API_KEY") {
                 Ok(key) if !key.is_empty() => Provider::DeepSeek(key),
-                _ => Provider::Bedrock,
+                _ => Provider::Bedrock(env_or("TONEMATE_AWS_PROFILE", "")),
             },
         }
     }
@@ -220,7 +221,7 @@ impl Provider {
     /// provider, "API key not valid" does not say whose.
     pub fn label(&self) -> &'static str {
         match self {
-            Provider::Bedrock => "bedrock",
+            Provider::Bedrock(_) => "bedrock",
             Provider::Kimi(_) => "kimi",
             Provider::DeepSeek(_) => "deepseek",
         }
@@ -270,11 +271,13 @@ pub(crate) fn env_or(key: &str, fallback: &str) -> String {
 /// than on the first translation.
 pub async fn warm(provider: &Provider) -> Result<(), String> {
     let result = match provider {
-        Provider::Bedrock => match bedrock::converse(&prompt_for("hi"), "hi", 1, |_| {}).await {
-            Ok(_) => Ok(()),
-            Err(err) if err.starts_with("model returned no text") => Ok(()),
-            Err(err) => Err(err),
-        },
+        Provider::Bedrock(profile) => {
+            match bedrock::converse(profile, &prompt_for("hi"), "hi", 1, |_| {}).await {
+                Ok(_) => Ok(()),
+                Err(err) if err.starts_with("model returned no text") => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
         // A one-token budget makes the answer empty by construction, which the
         // transport would otherwise call a failure. Only reachability is being
         // tested here, so that error is the success case.
@@ -319,7 +322,9 @@ pub async fn translate(
     on_delta: impl FnMut(&str),
 ) -> Result<(), String> {
     let result = match provider {
-        Provider::Bedrock => bedrock::converse(&prompt_for(text), text, MAX_TOKENS, on_delta).await,
+        Provider::Bedrock(profile) => {
+            bedrock::converse(profile, &prompt_for(text), text, MAX_TOKENS, on_delta).await
+        }
         Provider::Kimi(key) => {
             openai_compat::converse(
                 &Provider::kimi_endpoint(key),
@@ -355,7 +360,7 @@ mod tests {
 
     #[test]
     fn kimi_with_a_key_uses_kimi() {
-        let provider = choose("kimi", "sk-test123", "");
+        let provider = choose("kimi", "sk-test123", "", "");
         match &provider {
             Provider::Kimi(key) => assert_eq!(key, "sk-test123"),
             _ => panic!("expected Kimi variant"),
@@ -365,9 +370,9 @@ mod tests {
 
     #[test]
     fn kimi_without_a_key_falls_back_to_bedrock() {
-        let provider = choose("kimi", "", "");
+        let provider = choose("kimi", "", "", "");
         match provider {
-            Provider::Bedrock => (),
+            Provider::Bedrock(_) => (),
             _ => panic!("expected Bedrock fallback"),
         }
         assert_eq!(provider.label(), "bedrock");
@@ -375,7 +380,7 @@ mod tests {
 
     #[test]
     fn deepseek_with_a_key_uses_deepseek() {
-        let provider = choose("deepseek", "", "sk-test456");
+        let provider = choose("deepseek", "", "sk-test456", "");
         match &provider {
             Provider::DeepSeek(key) => assert_eq!(key, "sk-test456"),
             _ => panic!("expected DeepSeek variant"),
@@ -385,9 +390,9 @@ mod tests {
 
     #[test]
     fn deepseek_without_a_key_falls_back_to_bedrock() {
-        let provider = choose("deepseek", "", "");
+        let provider = choose("deepseek", "", "", "");
         match provider {
-            Provider::Bedrock => (),
+            Provider::Bedrock(_) => (),
             _ => panic!("expected Bedrock fallback"),
         }
         assert_eq!(provider.label(), "bedrock");
@@ -395,12 +400,21 @@ mod tests {
 
     #[test]
     fn an_unknown_provider_name_uses_bedrock() {
-        let provider = choose("openai", "", "");
+        let provider = choose("openai", "", "", "");
         match provider {
-            Provider::Bedrock => (),
+            Provider::Bedrock(_) => (),
             _ => panic!("expected Bedrock fallback"),
         }
         assert_eq!(provider.label(), "bedrock");
+    }
+
+    #[test]
+    fn the_aws_profile_rides_along_with_bedrock() {
+        let provider = choose("bedrock", "", "", "corp");
+        match provider {
+            Provider::Bedrock(profile) => assert_eq!(profile, "corp"),
+            _ => panic!("expected Bedrock with the stored profile"),
+        }
     }
 
     #[test]

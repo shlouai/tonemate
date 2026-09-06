@@ -13,12 +13,7 @@ API key into the settings window.
 - [Rust toolchain](https://rustup.rs) and [pnpm](https://pnpm.io)
 - Credentials for one of the two translation services:
   - **AWS Bedrock** (the default) — credentials that can call Bedrock in the
-    configured region. By default tonemate uses the `twdc-bedrock-central`
-    profile from `~/.aws/config`; if that profile is SSO-backed, log in first:
-
-    ```sh
-    aws sso login --profile twdc-bedrock-central
-    ```
+    configured region.
 
   - **Kimi** — an API key from [platform.moonshot.cn](https://platform.moonshot.cn),
     pasted into the settings window. Nothing else to install.
@@ -46,9 +41,9 @@ tonemate lives in the menu bar and not in the Dock — its icon in the right-han
 end of the status bar is the only part of it you can point at. Clicking it opens
 a three-item menu: summon the bar (the same thing the hotkey does), open the
 settings window, and quit. The settings window has two panels: 外观 holds the
-bar's colour, and 翻译服务 picks the translation service and holds its API key.
-Model ids and hosts are still set through the environment — see
-[Configuration](#configuration).
+bar's colour, and 翻译服务 picks the translation service, holds its API key, and
+holds the AWS profile Bedrock should use. Model ids and hosts are still set
+through the environment — see [Configuration](#configuration).
 
 The result box under the input is hidden until there is something to show, then
 grows the window downwards as the renderings stream in. How many you get is the
@@ -114,8 +109,12 @@ a machine, and both take effect immediately:
   without saving a key falls back to Bedrock and says so, since an empty key
   means "not set up yet". A key that the service *rejects* is reported instead of
   falling back — otherwise a revoked key would silently bill AWS forever.
+- **AWS Profile** — the profile Bedrock should use. Leave it empty and Bedrock
+  falls back to `TONEMATE_AWS_PROFILE`, then to AWS's own default chain
+  (`AWS_PROFILE`, or the `default` profile in `~/.aws/config`). Unlike the keys,
+  the profile name is not a secret, so the field shows it in full.
 
-Both live in
+These live in
 `~/Library/Application Support/com.lous008.tonemate/settings.json`, so they
 survive a restart. **The Kimi API key is stored there in cleartext**, readable by
 anything running as you; the file is written owner-only, which is a speed bump
@@ -126,7 +125,7 @@ shown.
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `TONEMATE_AWS_PROFILE` | `twdc-bedrock-central` | Bedrock |
+| `TONEMATE_AWS_PROFILE` | — | Bedrock |
 | `TONEMATE_AWS_REGION` | `us-west-2` | Bedrock |
 | `TONEMATE_MODEL` | `us.anthropic.claude-opus-5` | Bedrock |
 | `TONEMATE_EFFORT` | `low` | Bedrock |

@@ -79,9 +79,9 @@
             <legend>翻译服务</legend>
             <div class="providers">
               <label>
-                <input type="radio" name="provider" value="bedrock" />
-                <span class="name">AWS Bedrock</span>
-                <span class="note">环境中的 AWS profile</span>
+                <input type="radio" name="provider" value="deepseek" />
+                <span class="name">DeepSeek</span>
+                <span class="note" id="deepseek-state"></span>
               </label>
               <label>
                 <input type="radio" name="provider" value="kimi" />
@@ -91,12 +91,28 @@
                 <span class="note" id="kimi-state"></span>
               </label>
               <label>
-                <input type="radio" name="provider" value="deepseek" />
-                <span class="name">DeepSeek</span>
-                <span class="note" id="deepseek-state"></span>
+                <input type="radio" name="provider" value="bedrock" />
+                <span class="name">AWS Bedrock</span>
+                <!-- Filled in from `aws_profile`; the profile name is not a
+                     secret, so it may show in full here. -->
+                <span class="note" id="bedrock-state"></span>
               </label>
             </div>
           </fieldset>
+
+          <div class="key">
+            <label for="deepseek-key">DeepSeek API Key</label>
+            <div class="key-row">
+              <input
+                type="password"
+                id="deepseek-key"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" id="deepseek-clear">清除</button>
+            </div>
+            <p class="hint" id="deepseek-hint"></p>
+          </div>
 
           <div class="key">
             <label for="kimi-key">Kimi API Key</label>
@@ -113,17 +129,16 @@
           </div>
 
           <div class="key">
-            <label for="deepseek-key">DeepSeek API Key</label>
+            <label for="aws-profile">AWS Profile</label>
             <div class="key-row">
               <input
-                type="password"
-                id="deepseek-key"
+                type="text"
+                id="aws-profile"
                 autocomplete="off"
                 spellcheck="false"
               />
-              <button type="button" id="deepseek-clear">清除</button>
             </div>
-            <p class="hint" id="deepseek-hint"></p>
+            <p class="hint" id="aws-hint"></p>
           </div>
 
           <p id="active"></p>

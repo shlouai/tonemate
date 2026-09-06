@@ -20,9 +20,8 @@ use aws_sdk_bedrockruntime::{
     Client,
 };
 use aws_smithy_types::Document;
-use tokio::sync::OnceCell;
+use tokio::sync::Mutex;
 
-const DEFAULT_PROFILE: &str = "twdc-bedrock-central";
 const DEFAULT_REGION: &str = "us-west-2";
 /// Bedrock only serves the Claude 5 family through cross-region inference
 /// profiles, hence the `us.` prefix — the bare `anthropic.claude-opus-5` id is
@@ -32,9 +31,11 @@ const DEFAULT_MODEL: &str = "us.anthropic.claude-opus-5";
 /// translation from turning into a multi-second reasoning pass.
 const DEFAULT_EFFORT: &str = "low";
 
-/// Built on first use so startup stays instant, then reused so subsequent
-/// translations skip credential resolution.
-static CLIENT: OnceCell<Client> = OnceCell::const_new();
+/// Built once per profile and reused, so subsequent translations skip
+/// credential resolution. A profile name the user set in the settings window
+/// overrides the environment; an empty string in both means "use AWS's own
+/// default chain", which `aws_config` does when `profile_name` is left unset.
+static CLIENT: Mutex<Option<(String, Client)>> = Mutex::const_new(None);
 
 /// `effort` is an Opus/Sonnet-5-era parameter; Haiku 4.5 and older models
 /// reject it. Setting `TONEMATE_EFFORT=` (empty) drops it from the request so
@@ -47,23 +48,55 @@ fn effort() -> Option<String> {
     }
 }
 
-async fn client() -> &'static Client {
-    CLIENT
-        .get_or_init(|| async {
-            let config = aws_config::defaults(BehaviorVersion::latest())
-                .profile_name(env_or("TONEMATE_AWS_PROFILE", DEFAULT_PROFILE))
-                .region(Region::new(env_or("TONEMATE_AWS_REGION", DEFAULT_REGION)))
-                .load()
-                .await;
-            Client::new(&config)
-        })
-        .await
+/// The profile for a given Bedrock run: the one stored in settings first, then
+/// the `TONEMATE_AWS_PROFILE` environment variable, then empty. `env_or` alone
+/// would not do — the settings value is not an environment variable, and the
+/// settings window clearing its field must still win over a stale env var.
+fn resolve_profile(profile: &str) -> String {
+    if !profile.is_empty() {
+        profile.to_string()
+    } else {
+        env_or("TONEMATE_AWS_PROFILE", "")
+    }
+}
+
+async fn client(profile: &str) -> Client {
+    let resolved = resolve_profile(profile);
+
+    // Reuse the client when the resolved profile is unchanged; build a fresh one
+    // when it is not. The mutex is held only long enough to decide or build,
+    // since two translations racing on the same profile both want the same
+    // cached client and a second `Client::new` for it would be harmless anyway.
+    {
+        let guard = CLIENT.lock().await;
+        if let Some((cached, client)) = guard.as_ref() {
+            if *cached == resolved {
+                return client.clone();
+            }
+        }
+    }
+
+    let mut loader = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new(env_or("TONEMATE_AWS_REGION", DEFAULT_REGION)));
+    // An empty resolved profile is "use AWS's default chain", so `profile_name`
+    // is only set when there is a name — passing an empty string would make
+    // `aws_config` look up a profile literally named "".
+    if !resolved.is_empty() {
+        loader = loader.profile_name(resolved.clone());
+    }
+    let config = loader.load().await;
+    let client = Client::new(&config);
+
+    let mut guard = CLIENT.lock().await;
+    *guard = Some((resolved, client.clone()));
+    client
 }
 
 /// One streamed Converse call. Returns everything the model said; `on_delta`
 /// sees each text fragment as it lands, so callers can show the translation
 /// forming instead of waiting for the full response.
 pub(super) async fn converse(
+    profile: &str,
     system_prompt: &str,
     text: &str,
     max_tokens: i32,
@@ -75,8 +108,8 @@ pub(super) async fn converse(
         .build()
         .map_err(|err| err.to_string())?;
 
-    let mut request = client()
-        .await
+    let client = client(profile).await;
+    let mut request = client
         .converse_stream()
         .model_id(env_or("TONEMATE_MODEL", DEFAULT_MODEL))
         .system(SystemContentBlock::Text(system_prompt.to_string()))

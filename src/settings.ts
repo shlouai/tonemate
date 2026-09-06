@@ -3,11 +3,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const appWindow = getCurrentWindow();
 
-/** What Rust will say about the translation service. Never the key itself. */
+/** What Rust will say about the translation service. Never the key itself, but
+    the AWS profile is not a secret, so it comes through in full. */
 type ProviderConfig = {
   provider: string;
   kimi_key_set: boolean;
   deepseek_key_set: boolean;
+  aws_profile: string;
 };
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -55,6 +57,7 @@ async function wireProvider() {
         provider: "bedrock",
         kimi_key_set: false,
         deepseek_key_set: false,
+        aws_profile: "",
       };
     },
   );
@@ -88,6 +91,30 @@ async function wireProvider() {
     config = { ...config, deepseek_key_set: set };
     render();
   });
+  wireProfileField();
+
+  // Unlike the keys, the profile name is not a secret, so the field shows it in
+  // full and an empty box is an empty profile rather than a hidden one. Sent on
+  // `change` (blur or Enter), not per keystroke — each save writes the file and
+  // spends a warm-up request. Trimming here mirrors what Rust does before it
+  // stores, so the two cannot disagree about what an empty field means.
+  function wireProfileField() {
+    const input = document.querySelector<HTMLInputElement>("#aws-profile");
+    if (!input) return;
+
+    input.addEventListener("change", () => {
+      const profile = input.value.trim();
+      void invoke("set_aws_profile", { profile })
+        .then(() => {
+          config = { ...config, aws_profile: profile };
+          render();
+        })
+        .catch((error) => {
+          console.error(error);
+          render();
+        });
+    });
+  }
 
   // On `change`, so the key is sent on blur or Enter rather than on every
   // keystroke — a key is pasted, not typed, and each save writes the file and
@@ -137,6 +164,8 @@ async function wireProvider() {
   function render() {
     for (const radio of radios) radio.checked = radio.value === config.provider;
 
+    renderProfile(config.aws_profile);
+
     // The key itself never reaches this window, so an empty field is what a
     // configured key looks like. A placeholder of masked dots stands in for the
     // hidden key so the box does not read as "nothing saved" while the state
@@ -165,6 +194,24 @@ async function wireProvider() {
         : `当前使用: AWS Bedrock —— 已选 ${name} 但未填 API Key`;
     }
   }
+}
+
+/** Paints the AWS profile field and the Bedrock radio's note. The profile name
+    is not a secret, so the input holds the real value rather than a masked
+    placeholder; an empty field reads as "AWS 默认" because that is what Bedrock
+    does with no profile. */
+function renderProfile(awsProfile: string) {
+  const input = document.querySelector<HTMLInputElement>("#aws-profile");
+  if (input) input.value = awsProfile;
+
+  const state = document.querySelector<HTMLElement>("#bedrock-state");
+  if (state) state.textContent = awsProfile ? `profile: ${awsProfile}` : "AWS 默认";
+
+  const hint = document.querySelector<HTMLElement>("#aws-hint");
+  if (hint)
+    hint.textContent = awsProfile
+      ? "留空则回到 AWS 默认凭证链。"
+      : "留空使用 AWS 默认凭证链(AWS_PROFILE 或 default profile)。";
 }
 
 /** Paints one provider's key row — placeholder, "已配置" state, and hint — from

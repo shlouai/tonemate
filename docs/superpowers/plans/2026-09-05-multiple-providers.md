@@ -1898,12 +1898,7 @@ Replace the Prerequisites section with:
 - [Rust toolchain](https://rustup.rs) and [pnpm](https://pnpm.io)
 - Credentials for one of the two translation services:
   - **AWS Bedrock** (the default) — credentials that can call Bedrock in the
-    configured region. By default tonemate uses the `twdc-bedrock-central`
-    profile from `~/.aws/config`; if that profile is SSO-backed, log in first:
-
-    ```sh
-    aws sso login --profile twdc-bedrock-central
-    ```
+    configured region.
 
   - **Kimi** — an API key from [platform.moonshot.cn](https://platform.moonshot.cn),
     pasted into the settings window. Nothing else to install.
@@ -1972,7 +1967,7 @@ shown.
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `TONEMATE_AWS_PROFILE` | `twdc-bedrock-central` | Bedrock |
+| `TONEMATE_AWS_PROFILE` | — | Bedrock |
 | `TONEMATE_AWS_REGION` | `us-west-2` | Bedrock |
 | `TONEMATE_MODEL` | `us.anthropic.claude-opus-5` | Bedrock |
 | `TONEMATE_EFFORT` | `low` | Bedrock |

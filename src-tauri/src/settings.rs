@@ -40,6 +40,10 @@ struct Stored {
     /// Empty means unset, which is what sends translation back to Bedrock.
     kimi_api_key: String,
     deepseek_api_key: String,
+    /// The AWS profile Bedrock uses. Empty means "use AWS's own default chain"
+    /// (`AWS_PROFILE`, or the `default` profile in `~/.aws/config`). Not a
+    /// secret, so unlike the keys it is sent to the window in full.
+    aws_profile: String,
 }
 
 /// The accent the bar should be painted in.
@@ -74,6 +78,7 @@ pub struct ProviderConfig {
     pub provider: String,
     pub kimi_key_set: bool,
     pub deepseek_key_set: bool,
+    pub aws_profile: String,
 }
 
 #[tauri::command]
@@ -83,6 +88,7 @@ pub fn provider_config(app: AppHandle) -> ProviderConfig {
         provider: stored.provider,
         kimi_key_set: !stored.kimi_api_key.is_empty(),
         deepseek_key_set: !stored.deepseek_api_key.is_empty(),
+        aws_profile: stored.aws_profile,
     }
 }
 
@@ -95,6 +101,30 @@ pub fn set_provider(app: AppHandle, provider: String) -> Result<(), String> {
     // network round trip. A bad key or wrong host appears in the log at save time
     // rather than on the first translation, which is where the answer belongs
     // since this window shows no validation verdict.
+    let warm_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let chosen = crate::provider::Provider::from_settings(&warm_handle);
+        match crate::provider::warm(&chosen).await {
+            Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+            Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
+        }
+    });
+
+    Ok(())
+}
+
+/// The AWS profile Bedrock should use. An empty string clears it back to AWS's
+/// own default chain. Like `set_provider`, the warm-up is spawned so the window
+/// does not block on the credential resolution a profile change can trigger.
+#[tauri::command]
+pub fn set_aws_profile(app: AppHandle, profile: String) -> Result<(), String> {
+    let profile = profile.trim().to_string();
+    update(&app, |stored| stored.aws_profile = profile.clone())?;
+    println!(
+        "[tonemate] aws profile -> {}",
+        if profile.is_empty() { "(default)" } else { &profile }
+    );
+
     let warm_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let chosen = crate::provider::Provider::from_settings(&warm_handle);
@@ -180,6 +210,11 @@ pub fn deepseek_api_key(app: &AppHandle) -> String {
     load(app).deepseek_api_key
 }
 
+/// The stored AWS profile, or an empty string when there is none.
+pub fn aws_profile(app: &AppHandle) -> String {
+    load(app).aws_profile
+}
+
 fn file(app: &AppHandle) -> Option<PathBuf> {
     app.path().app_config_dir().ok().map(|dir| dir.join(FILE))
 }
@@ -208,6 +243,7 @@ fn defaults() -> Stored {
         provider: DEFAULT_PROVIDER.to_string(),
         kimi_api_key: String::new(),
         deepseek_api_key: String::new(),
+        aws_profile: String::new(),
     }
 }
 
@@ -269,6 +305,7 @@ mod tests {
         assert_eq!(stored.provider, DEFAULT_PROVIDER);
         assert_eq!(stored.kimi_api_key, "");
         assert_eq!(stored.deepseek_api_key, "");
+        assert_eq!(stored.aws_profile, "");
     }
 
     #[test]
@@ -281,6 +318,7 @@ mod tests {
                 provider: "deepseek".to_string(),
                 kimi_api_key: "sk-example".to_string(),
                 deepseek_api_key: "sk-deepseek".to_string(),
+                aws_profile: "corp".to_string(),
             },
         )
         .unwrap();
@@ -289,6 +327,7 @@ mod tests {
         assert_eq!(stored.provider, "deepseek");
         assert_eq!(stored.kimi_api_key, "sk-example");
         assert_eq!(stored.deepseek_api_key, "sk-deepseek");
+        assert_eq!(stored.aws_profile, "corp");
         let _ = fs::remove_file(&file);
     }
 
