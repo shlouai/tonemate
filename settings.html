@@ -84,6 +84,13 @@
                 <span class="note" id="deepseek-state"></span>
               </label>
               <label>
+                <input type="radio" name="provider" value="qwen" />
+                <span class="name">Qwen</span>
+                <!-- Filled in from `qwen_key_set`; the key itself never reaches
+                     this window. -->
+                <span class="note" id="qwen-state"></span>
+              </label>
+              <label>
                 <input type="radio" name="provider" value="kimi" />
                 <span class="name">Kimi</span>
                 <!-- Filled in from `kimi_key_set`; the key itself never reaches
@@ -112,6 +119,20 @@
               <button type="button" id="deepseek-clear">清除</button>
             </div>
             <p class="hint" id="deepseek-hint"></p>
+          </div>
+
+          <div class="key">
+            <label for="qwen-key">Qwen API Key</label>
+            <div class="key-row">
+              <input
+                type="password"
+                id="qwen-key"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" id="qwen-clear">清除</button>
+            </div>
+            <p class="hint" id="qwen-hint"></p>
           </div>
 
           <div class="key">

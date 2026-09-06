@@ -152,6 +152,18 @@ const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
 /// and return no translation.
 const DEEPSEEK_MODEL: &str = "deepseek-chat";
 
+/// Qwen's OpenAI-compatible host. A key issued for the international host
+/// (`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`) returns `401
+/// Invalid Authentication` here and vice versa, and the key string does not say
+/// which it is — hence the override, the same shape as Kimi's.
+const QWEN_BASE_URL: &str = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+
+/// `qwen3.7-plus` is the current balanced tier. The old `qwen-plus` rolling
+/// alias still resolves but is absent from the model list and is being sunset in
+/// the October 2026 migration, so a name the console actually lists is the safer
+/// default.
+const QWEN_MODEL: &str = "qwen3.7-plus";
+
 /// The service a translation goes through. An enum rather than a trait: the set
 /// is fixed at compile time and picked by a `match`, so the boxing and lifetime
 /// work an `async` trait method would need buys nothing.
@@ -163,12 +175,19 @@ pub enum Provider {
     Bedrock(String),
     Kimi(String),
     DeepSeek(String),
+    Qwen(String),
 }
 
 /// Which provider a stored setting pair means. Split out from `from_settings`
 /// so the fallback rule can be tested: an `AppHandle` cannot be built in a
 /// unit test, and this rule is the one the user notices when it is wrong.
-fn choose(provider: &str, kimi_key: &str, deepseek_key: &str, aws_profile: &str) -> Provider {
+fn choose(
+    provider: &str,
+    kimi_key: &str,
+    deepseek_key: &str,
+    qwen_key: &str,
+    aws_profile: &str,
+) -> Provider {
     match provider {
         "kimi" if kimi_key.is_empty() => {
             println!("[tonemate] kimi selected but no api key set; using bedrock");
@@ -180,6 +199,11 @@ fn choose(provider: &str, kimi_key: &str, deepseek_key: &str, aws_profile: &str)
             Provider::Bedrock(aws_profile.to_string())
         }
         "deepseek" => Provider::DeepSeek(deepseek_key.to_string()),
+        "qwen" if qwen_key.is_empty() => {
+            println!("[tonemate] qwen selected but no api key set; using bedrock");
+            Provider::Bedrock(aws_profile.to_string())
+        }
+        "qwen" => Provider::Qwen(qwen_key.to_string()),
         "bedrock" => Provider::Bedrock(aws_profile.to_string()),
         _ => {
             println!("[tonemate] unrecognised provider \"{provider}\"; using bedrock");
@@ -201,6 +225,7 @@ impl Provider {
             &crate::settings::provider_name(app),
             &crate::settings::kimi_api_key(app),
             &crate::settings::deepseek_api_key(app),
+            &crate::settings::qwen_api_key(app),
             &crate::settings::aws_profile(app),
         )
     }
@@ -212,7 +237,10 @@ impl Provider {
             Ok(key) if !key.is_empty() => Provider::Kimi(key),
             _ => match std::env::var("TONEMATE_DEEPSEEK_API_KEY") {
                 Ok(key) if !key.is_empty() => Provider::DeepSeek(key),
-                _ => Provider::Bedrock(env_or("TONEMATE_AWS_PROFILE", "")),
+                _ => match std::env::var("TONEMATE_QWEN_API_KEY") {
+                    Ok(key) if !key.is_empty() => Provider::Qwen(key),
+                    _ => Provider::Bedrock(env_or("TONEMATE_AWS_PROFILE", "")),
+                },
             },
         }
     }
@@ -224,6 +252,7 @@ impl Provider {
             Provider::Bedrock(_) => "bedrock",
             Provider::Kimi(_) => "kimi",
             Provider::DeepSeek(_) => "deepseek",
+            Provider::Qwen(_) => "qwen",
         }
     }
 
@@ -252,6 +281,21 @@ impl Provider {
             api_key: key.to_string(),
             max_tokens_field: "max_tokens",
             extra: serde_json::json!({}),
+        }
+    }
+
+    /// Where a Qwen request goes and what it asks for. `enable_thinking: false`
+    /// is not optional: Qwen 3.x models deliberate by default, and measured that
+    /// way `qwen3.7-plus` spent ~21s reasoning before its first content frame —
+    /// the same failure Kimi's `thinking: disabled` fixes. `max_tokens` rather
+    /// than `max_completion_tokens` because Qwen silently ignores the latter.
+    fn qwen_endpoint(key: &str) -> openai_compat::Endpoint {
+        openai_compat::Endpoint {
+            base_url: env_or("TONEMATE_QWEN_BASE_URL", QWEN_BASE_URL),
+            model: env_or("TONEMATE_QWEN_MODEL", QWEN_MODEL),
+            api_key: key.to_string(),
+            max_tokens_field: "max_tokens",
+            extra: serde_json::json!({ "enable_thinking": false }),
         }
     }
 }
@@ -311,6 +355,21 @@ pub async fn warm(provider: &Provider) -> Result<(), String> {
                 Err(err) => Err(err),
             }
         }
+        Provider::Qwen(key) => {
+            match openai_compat::converse(
+                &Provider::qwen_endpoint(key),
+                &prompt_for("hi"),
+                "hi",
+                1,
+                |_| {},
+            )
+            .await
+            {
+                Ok(_) => Ok(()),
+                Err(err) if err.starts_with("model returned no text") => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
     };
 
     result.map_err(|err| format!("{}: {err}", provider.label()))
@@ -345,6 +404,16 @@ pub async fn translate(
             )
             .await
         }
+        Provider::Qwen(key) => {
+            openai_compat::converse(
+                &Provider::qwen_endpoint(key),
+                &prompt_for(text),
+                text,
+                MAX_TOKENS as u32,
+                on_delta,
+            )
+            .await
+        }
     };
 
     // Prefixed here rather than in each transport, so every provider's failures
@@ -360,7 +429,7 @@ mod tests {
 
     #[test]
     fn kimi_with_a_key_uses_kimi() {
-        let provider = choose("kimi", "sk-test123", "", "");
+        let provider = choose("kimi", "sk-test123", "", "", "");
         match &provider {
             Provider::Kimi(key) => assert_eq!(key, "sk-test123"),
             _ => panic!("expected Kimi variant"),
@@ -370,7 +439,7 @@ mod tests {
 
     #[test]
     fn kimi_without_a_key_falls_back_to_bedrock() {
-        let provider = choose("kimi", "", "", "");
+        let provider = choose("kimi", "", "", "", "");
         match provider {
             Provider::Bedrock(_) => (),
             _ => panic!("expected Bedrock fallback"),
@@ -380,7 +449,7 @@ mod tests {
 
     #[test]
     fn deepseek_with_a_key_uses_deepseek() {
-        let provider = choose("deepseek", "", "sk-test456", "");
+        let provider = choose("deepseek", "", "sk-test456", "", "");
         match &provider {
             Provider::DeepSeek(key) => assert_eq!(key, "sk-test456"),
             _ => panic!("expected DeepSeek variant"),
@@ -390,7 +459,27 @@ mod tests {
 
     #[test]
     fn deepseek_without_a_key_falls_back_to_bedrock() {
-        let provider = choose("deepseek", "", "", "");
+        let provider = choose("deepseek", "", "", "", "");
+        match provider {
+            Provider::Bedrock(_) => (),
+            _ => panic!("expected Bedrock fallback"),
+        }
+        assert_eq!(provider.label(), "bedrock");
+    }
+
+    #[test]
+    fn qwen_with_a_key_uses_qwen() {
+        let provider = choose("qwen", "", "", "sk-test789", "");
+        match &provider {
+            Provider::Qwen(key) => assert_eq!(key, "sk-test789"),
+            _ => panic!("expected Qwen variant"),
+        }
+        assert_eq!(provider.label(), "qwen");
+    }
+
+    #[test]
+    fn qwen_without_a_key_falls_back_to_bedrock() {
+        let provider = choose("qwen", "", "", "", "");
         match provider {
             Provider::Bedrock(_) => (),
             _ => panic!("expected Bedrock fallback"),
@@ -400,7 +489,7 @@ mod tests {
 
     #[test]
     fn an_unknown_provider_name_uses_bedrock() {
-        let provider = choose("openai", "", "", "");
+        let provider = choose("openai", "", "", "", "");
         match provider {
             Provider::Bedrock(_) => (),
             _ => panic!("expected Bedrock fallback"),
@@ -410,7 +499,7 @@ mod tests {
 
     #[test]
     fn the_aws_profile_rides_along_with_bedrock() {
-        let provider = choose("bedrock", "", "", "corp");
+        let provider = choose("bedrock", "", "", "", "corp");
         match provider {
             Provider::Bedrock(profile) => assert_eq!(profile, "corp"),
             _ => panic!("expected Bedrock with the stored profile"),

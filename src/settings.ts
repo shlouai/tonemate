@@ -9,6 +9,7 @@ type ProviderConfig = {
   provider: string;
   kimi_key_set: boolean;
   deepseek_key_set: boolean;
+  qwen_key_set: boolean;
   aws_profile: string;
 };
 
@@ -57,6 +58,7 @@ async function wireProvider() {
         provider: "bedrock",
         kimi_key_set: false,
         deepseek_key_set: false,
+        qwen_key_set: false,
         aws_profile: "",
       };
     },
@@ -91,6 +93,10 @@ async function wireProvider() {
     config = { ...config, deepseek_key_set: set };
     render();
   });
+  wireKeyField("qwen", "set_qwen_api_key", (set) => {
+    config = { ...config, qwen_key_set: set };
+    render();
+  });
   wireProfileField();
 
   // Unlike the keys, the profile name is not a secret, so the field shows it in
@@ -122,8 +128,8 @@ async function wireProvider() {
   // the stored key is never sent to this window, so an empty box is what a
   // configured key looks like here. Clearing is the button's job alone.
   function wireKeyField(
-    prefix: "kimi" | "deepseek",
-    command: "set_kimi_api_key" | "set_deepseek_api_key",
+    prefix: "kimi" | "deepseek" | "qwen",
+    command: "set_kimi_api_key" | "set_deepseek_api_key" | "set_qwen_api_key",
     applied: (set: boolean) => void,
   ) {
     const keyInput = document.querySelector<HTMLInputElement>(`#${prefix}-key`);
@@ -174,6 +180,8 @@ async function wireProvider() {
       "在 platform.moonshot.cn 获取。国际站的 key 需要设置 TONEMATE_KIMI_BASE_URL。");
     renderKey("deepseek", config.deepseek_key_set,
       "在 platform.deepseek.com 获取。");
+    renderKey("qwen", config.qwen_key_set,
+      "在百炼 / QwenCloud 获取。国际站的 key 需要设置 TONEMATE_QWEN_BASE_URL。");
 
     // Says what will actually happen on the next translation, which is not
     // always what is ticked: a provider without a key falls back to Bedrock,
@@ -184,10 +192,12 @@ async function wireProvider() {
       const name =
         config.provider === "kimi" ? "Kimi"
         : config.provider === "deepseek" ? "DeepSeek"
+        : config.provider === "qwen" ? "Qwen"
         : "AWS Bedrock";
       const keySet =
         config.provider === "kimi" ? config.kimi_key_set
         : config.provider === "deepseek" ? config.deepseek_key_set
+        : config.provider === "qwen" ? config.qwen_key_set
         : true;
       active.textContent = keySet
         ? `当前使用: ${name}`
@@ -217,7 +227,7 @@ function renderProfile(awsProfile: string) {
 /** Paints one provider's key row — placeholder, "已配置" state, and hint — from
     the boolean Rust sends instead of the key itself. */
 function renderKey(
-  prefix: "kimi" | "deepseek",
+  prefix: "kimi" | "deepseek" | "qwen",
   keySet: boolean,
   emptyHint: string,
 ) {

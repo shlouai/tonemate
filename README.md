@@ -5,8 +5,8 @@ any language, press Enter, and several translations stream into a box under the
 input — the same sentence rendered in 3 to 5 different tones, each labelled, so
 you can pick the one that fits who is reading it. The direction picks itself —
 English in gets Chinese back, anything else gets English. Translation runs through
-Claude on Amazon Bedrock by default, or through Kimi or DeepSeek if you paste an
-API key into the settings window.
+Claude on Amazon Bedrock by default, or through Kimi, DeepSeek, or Qwen if you
+paste an API key into the settings window.
 
 ## Prerequisites
 
@@ -19,6 +19,9 @@ API key into the settings window.
     pasted into the settings window. Nothing else to install.
 
   - **DeepSeek** — an API key from [platform.deepseek.com](https://platform.deepseek.com),
+    pasted into the settings window. Nothing else to install.
+
+  - **Qwen** — an API key from [百炼 / QwenCloud](https://www.alibabacloud.com/help/en/model-studio),
     pasted into the settings window. Nothing else to install.
 
 ## Running it
@@ -63,14 +66,14 @@ launching terminal:
 冷淡	Not coming tomorrow.
 ```
 
-`[tonemate] bedrock warm` — or `[tonemate] kimi warm` / `[tonemate] deepseek warm`,
-naming whichever service is selected — appears shortly after startup. That is a
-background warm-up request that pays the one-time setup cost up front, so it does
-not land on your first translation. On Bedrock that cost is credential resolution
-plus the TLS handshake, and takes 2-3s; Kimi and DeepSeek have no credential chain
-to resolve, so it is just the handshake. If it fails, the log says why: expired
-SSO credentials on Bedrock, and on Kimi or DeepSeek usually a rejected API key or
-the wrong host.
+`[tonemate] bedrock warm` — or `[tonemate] kimi warm` / `[tonemate] deepseek warm` /
+`[tonemate] qwen warm`, naming whichever service is selected — appears shortly
+after startup. That is a background warm-up request that pays the one-time setup
+cost up front, so it does not land on your first translation. On Bedrock that
+cost is credential resolution plus the TLS handshake, and takes 2-3s; Kimi,
+DeepSeek and Qwen have no credential chain to resolve, so it is just the
+handshake. If it fails, the log says why: expired SSO credentials on Bedrock, and
+on Kimi, DeepSeek or Qwen usually a rejected API key or the wrong host.
 
 Warm, Bedrock's first rendering appears about 1.8s after you press Enter and the
 full set totals 2.9-3.7s. Kimi is comparable and often quicker — measured at
@@ -88,12 +91,14 @@ cargo run --example translate -- "今天天气不错，我们出去走走吧。"
 
 It prints the raw stream, then a `[tonemate] parsed N tones:` block listing each
 labelled rendering, then time-to-first-word and total time. It uses Bedrock
-unless `TONEMATE_KIMI_API_KEY` or `TONEMATE_DEEPSEEK_API_KEY` is set, since it has
-no access to the settings window's choice:
+unless `TONEMATE_KIMI_API_KEY`, `TONEMATE_DEEPSEEK_API_KEY`, or
+`TONEMATE_QWEN_API_KEY` is set, since it has no access to the settings window's
+choice:
 
 ```sh
 TONEMATE_KIMI_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
 TONEMATE_DEEPSEEK_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
+TONEMATE_QWEN_API_KEY=sk-… cargo run --example translate -- "我明天不能来了"
 ```
 
 ## Configuration
@@ -105,8 +110,8 @@ a machine, and both take effect immediately:
   you choose. All six are dark panes of the same lightness, because the text,
   borders and grip drawn on them are white at some opacity; a light bar would be
   a second theme rather than a colour.
-- **翻译服务** — AWS Bedrock, Kimi, or DeepSeek. Choosing Kimi or DeepSeek
-  without saving a key falls back to Bedrock and says so, since an empty key
+- **翻译服务** — AWS Bedrock, Kimi, DeepSeek, or Qwen. Choosing Kimi, DeepSeek or
+  Qwen without saving a key falls back to Bedrock and says so, since an empty key
   means "not set up yet". A key that the service *rejects* is reported instead of
   falling back — otherwise a revoked key would silently bill AWS forever.
 - **AWS Profile** — the profile Bedrock should use. Leave it empty and Bedrock
@@ -116,7 +121,7 @@ a machine, and both take effect immediately:
 
 These live in
 `~/Library/Application Support/com.lous008.tonemate/settings.json`, so they
-survive a restart. **The Kimi API key is stored there in cleartext**, readable by
+survive a restart. **The API keys are stored there in cleartext**, readable by
 anything running as you; the file is written owner-only, which is a speed bump
 rather than protection.
 
@@ -135,6 +140,9 @@ shown.
 | `TONEMATE_DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | DeepSeek |
 | `TONEMATE_DEEPSEEK_MODEL` | `deepseek-chat` | DeepSeek |
 | `TONEMATE_DEEPSEEK_API_KEY` | — | the CLI example only |
+| `TONEMATE_QWEN_BASE_URL` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Qwen |
+| `TONEMATE_QWEN_MODEL` | `qwen3.7-plus` | Qwen |
+| `TONEMATE_QWEN_API_KEY` | — | the CLI example only |
 
 Bedrock serves the Claude 5 family only through cross-region inference profiles,
 so `TONEMATE_MODEL` needs the `us.` prefix — a bare `anthropic.claude-opus-5` is
@@ -161,6 +169,18 @@ One DeepSeek note, of the same shape: keep `TONEMATE_DEEPSEEK_MODEL` on
 `deepseek-chat`, the non-reasoning model. `deepseek-reasoner` is deliberately not
 offered — like Kimi's reasoning, it would spend the budget deliberating and
 return no translation.
+
+One Qwen note, too. Qwen runs a domestic host
+(`dashscope.aliyuncs.com`) and an international one
+(`dashscope-intl.aliyuncs.com`), both under the `/compatible-mode/v1` path, and a
+key issued for one returns `401 Invalid Authentication` on the other — so a `401`
+usually means the wrong `TONEMATE_QWEN_BASE_URL`, the same shape as Kimi's two
+hosts. `TONEMATE_QWEN_MODEL` defaults to `qwen3.7-plus`, the balanced tier; the
+`flash` tier is cheaper and the `max` tier more capable if you want to trade one
+way or the other. Whatever model you pick, thinking has to stay off: Qwen 3.x
+models deliberate by default, and the app already sends `enable_thinking: false`
+because, left on, `qwen3.7-plus` spends ~21s reasoning before its first word —
+the same failure Kimi's `thinking: disabled` exists for.
 
 ## Building a release binary
 

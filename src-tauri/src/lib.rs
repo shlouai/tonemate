@@ -86,6 +86,7 @@ pub fn run() {
             settings::set_provider,
             settings::set_kimi_api_key,
             settings::set_deepseek_api_key,
+            settings::set_qwen_api_key,
             settings::set_aws_profile
         ])
         // The settings window is reused rather than rebuilt, so closing it has

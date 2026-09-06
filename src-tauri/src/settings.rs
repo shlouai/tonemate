@@ -33,13 +33,14 @@ const FILE: &str = "settings.json";
 #[serde(default)]
 struct Stored {
     accent: String,
-    /// `"bedrock"`, `"kimi"`, or `"deepseek"`. A string rather than an enum so a
-    /// name written by a later version survives a round trip through this one
-    /// instead of taking the whole file down with it.
+    /// `"bedrock"`, `"kimi"`, `"deepseek"`, or `"qwen"`. A string rather than an
+    /// enum so a name written by a later version survives a round trip through
+    /// this one instead of taking the whole file down with it.
     provider: String,
     /// Empty means unset, which is what sends translation back to Bedrock.
     kimi_api_key: String,
     deepseek_api_key: String,
+    qwen_api_key: String,
     /// The AWS profile Bedrock uses. Empty means "use AWS's own default chain"
     /// (`AWS_PROFILE`, or the `default` profile in `~/.aws/config`). Not a
     /// secret, so unlike the keys it is sent to the window in full.
@@ -78,6 +79,7 @@ pub struct ProviderConfig {
     pub provider: String,
     pub kimi_key_set: bool,
     pub deepseek_key_set: bool,
+    pub qwen_key_set: bool,
     pub aws_profile: String,
 }
 
@@ -88,6 +90,7 @@ pub fn provider_config(app: AppHandle) -> ProviderConfig {
         provider: stored.provider,
         kimi_key_set: !stored.kimi_api_key.is_empty(),
         deepseek_key_set: !stored.deepseek_api_key.is_empty(),
+        qwen_key_set: !stored.qwen_api_key.is_empty(),
         aws_profile: stored.aws_profile,
     }
 }
@@ -169,7 +172,7 @@ pub fn set_kimi_api_key(app: AppHandle, key: String) -> Result<(), String> {
 }
 
 /// The DeepSeek twin of `set_kimi_api_key`, down to the empty-clears semantics
-/// and the spawned warm-up. Kept separate rather than generalised: the two names
+/// and the spawned warm-up. Kept separate rather than generalised: the names
 /// are read as "Kimi's key" and "DeepSeek's key" in the settings window, and a
 /// single parameterised command would just move that naming somewhere less
 /// obvious.
@@ -180,6 +183,29 @@ pub fn set_deepseek_api_key(app: AppHandle, key: String) -> Result<(), String> {
     update(&app, |stored| stored.deepseek_api_key = key.clone())?;
     println!(
         "[tonemate] deepseek api key -> {}",
+        if set { "set" } else { "cleared" }
+    );
+
+    let warm_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let chosen = crate::provider::Provider::from_settings(&warm_handle);
+        match crate::provider::warm(&chosen).await {
+            Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+            Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
+        }
+    });
+
+    Ok(())
+}
+
+/// The Qwen twin of `set_kimi_api_key`, same shape as the DeepSeek one.
+#[tauri::command]
+pub fn set_qwen_api_key(app: AppHandle, key: String) -> Result<(), String> {
+    let key = key.trim().to_string();
+    let set = !key.is_empty();
+    update(&app, |stored| stored.qwen_api_key = key.clone())?;
+    println!(
+        "[tonemate] qwen api key -> {}",
         if set { "set" } else { "cleared" }
     );
 
@@ -208,6 +234,11 @@ pub fn kimi_api_key(app: &AppHandle) -> String {
 /// The stored DeepSeek key, or an empty string when there is none.
 pub fn deepseek_api_key(app: &AppHandle) -> String {
     load(app).deepseek_api_key
+}
+
+/// The stored Qwen key, or an empty string when there is none.
+pub fn qwen_api_key(app: &AppHandle) -> String {
+    load(app).qwen_api_key
 }
 
 /// The stored AWS profile, or an empty string when there is none.
@@ -243,6 +274,7 @@ fn defaults() -> Stored {
         provider: DEFAULT_PROVIDER.to_string(),
         kimi_api_key: String::new(),
         deepseek_api_key: String::new(),
+        qwen_api_key: String::new(),
         aws_profile: String::new(),
     }
 }
@@ -305,6 +337,7 @@ mod tests {
         assert_eq!(stored.provider, DEFAULT_PROVIDER);
         assert_eq!(stored.kimi_api_key, "");
         assert_eq!(stored.deepseek_api_key, "");
+        assert_eq!(stored.qwen_api_key, "");
         assert_eq!(stored.aws_profile, "");
     }
 
@@ -318,6 +351,7 @@ mod tests {
                 provider: "deepseek".to_string(),
                 kimi_api_key: "sk-example".to_string(),
                 deepseek_api_key: "sk-deepseek".to_string(),
+                qwen_api_key: "sk-qwen".to_string(),
                 aws_profile: "corp".to_string(),
             },
         )
@@ -327,6 +361,7 @@ mod tests {
         assert_eq!(stored.provider, "deepseek");
         assert_eq!(stored.kimi_api_key, "sk-example");
         assert_eq!(stored.deepseek_api_key, "sk-deepseek");
+        assert_eq!(stored.qwen_api_key, "sk-qwen");
         assert_eq!(stored.aws_profile, "corp");
         let _ = fs::remove_file(&file);
     }
@@ -352,6 +387,7 @@ mod tests {
         assert_eq!(stored.provider, DEFAULT_PROVIDER);
         assert_eq!(stored.kimi_api_key, "");
         assert_eq!(stored.deepseek_api_key, "");
+        assert_eq!(stored.qwen_api_key, "");
         let _ = fs::remove_file(&file);
     }
 
