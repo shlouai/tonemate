@@ -102,7 +102,7 @@ tonemate 默认使用 **AWS Bedrock**；你也可以在设置里切换成别的�
 
 在 设置 → 翻译服务 中选择「本地模型 (Hy-MT2)」即可离线翻译，文本不离开本机。
 首次选择会自动下载约 440 MB 的模型（通过 `hf-mirror.com` 镜像）；下载支持断点续传。
-翻译在本机通过 llama.cpp 运行，首次翻译时会自动准备运行时（约几秒）。
+翻译在本机通过 llama.cpp 运行，首次翻译时会自动准备运行时（约几秒）。模型和运行时都自带镜像回退——官方源无法访问时自动换用镜像，无需手动配置。
 
 默认仍是 AWS Bedrock；未选择本地模型时不会下载任何东西。
 
@@ -111,7 +111,7 @@ tonemate 默认使用 **AWS Bedrock**；你也可以在设置里切换成别的�
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `TONEMATE_LOCAL_MODEL_URL` | 内置镜像 URL | 覆盖模型下载地址 |
-| `TONEMATE_LLAMA_SERVER_URL` | llama.cpp b10936 发布地址 | 覆盖运行时下载地址（如走其它镜像） |
+| `TONEMATE_LLAMA_SERVER_URL` | llama.cpp b10936 发布地址 | 覆盖运行时下载地址（可选；默认已自动尝试镜像） |
 | `TONEMATE_LOCAL_PORT` | `8931` | llama-server 端口 |
 | `TONEMATE_LOCAL_N_GPU_LAYERS` | `0` | GPU 卸载层数，0 = 仅 CPU |
 

@@ -102,7 +102,7 @@ Choosing Kimi / DeepSeek / Qwen without a saved key falls back to Bedrock and sa
 
 Pick **Local model (Hy-MT2)** in Settings → Translation service to translate offline, with your text never leaving this machine.
 Selecting it for the first time downloads the model automatically (~440 MB, via the `hf-mirror.com` mirror); the download is resumable.
-Translation runs locally through llama.cpp, which prepares its runtime on the first translation (a few seconds).
+Translation runs locally through llama.cpp, which prepares its runtime on the first translation (a few seconds). Both the model and the runtime fall back to mirrors automatically when their official host is unreachable — no manual configuration needed.
 
 The default is still AWS Bedrock; nothing is downloaded unless you select the local model.
 
@@ -111,7 +111,7 @@ Available environment variables:
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `TONEMATE_LOCAL_MODEL_URL` | built-in mirror URL | Override the model download URL |
-| `TONEMATE_LLAMA_SERVER_URL` | llama.cpp b10936 release URL | Override the runtime download URL (e.g. for another mirror) |
+| `TONEMATE_LLAMA_SERVER_URL` | llama.cpp b10936 release URL | Override the runtime download URL (optional; mirrors are tried automatically) |
 | `TONEMATE_LOCAL_PORT` | `8931` | llama-server port |
 | `TONEMATE_LOCAL_N_GPU_LAYERS` | `0` | GPU offload layers; 0 = CPU only |
 

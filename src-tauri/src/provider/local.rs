@@ -47,13 +47,32 @@ const SERVER_BIN: &str = "llama-server.exe";
 #[cfg(not(target_os = "windows"))]
 const SERVER_BIN: &str = "llama-server";
 
-fn binary_url() -> String {
-    env_or(
-        "TONEMATE_LLAMA_SERVER_URL",
-        &format!(
-            "https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_CPP_TAG}/{BINARY_ASSET}"
-        ),
-    )
+/// GitHub-release proxies for networks where `github.com` itself is
+/// unreachable — the same situation that sends the model download through
+/// `hf-mirror.com`. Each is a prefix followed by the full
+/// `https://github.com/…` path; tried in order before the canonical URL.
+const BINARY_MIRRORS: [&str; 3] = [
+    "https://ghfast.top",
+    "https://gh-proxy.com",
+    "https://ghproxy.net",
+];
+
+/// The URLs to try for the llama.cpp archive, in order: a user-set override,
+/// then the mirrors, then GitHub itself.
+fn binary_urls() -> Vec<String> {
+    let canonical = format!(
+        "https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_CPP_TAG}/{BINARY_ASSET}"
+    );
+    let mut urls = Vec::with_capacity(BINARY_MIRRORS.len() + 2);
+    let override_url = env_or("TONEMATE_LLAMA_SERVER_URL", "");
+    if !override_url.is_empty() {
+        urls.push(override_url);
+    }
+    for mirror in BINARY_MIRRORS {
+        urls.push(format!("{mirror}/{canonical}"));
+    }
+    urls.push(canonical);
+    urls
 }
 
 /// Where the model weights live.
@@ -173,6 +192,16 @@ async fn download(
         .map_err(|e| e.to_string())?;
 
     let resumed = resume_offset(existing, response.status().as_u16() == 206);
+    // A mirror or proxy can answer 200 with an HTML error page instead of the
+    // file. Refuse it before writing anything, so a bad response can't leave a
+    // `.part` that a later mirror would resume from and corrupt. Servers that
+    // stream chunked (no Content-Length) skip the check.
+    if let Some(len) = response.content_length() {
+        let expected = total - resumed;
+        if len != expected {
+            return Err(format!("响应大小不符：{len}（期望 {expected}）"));
+        }
+    }
     let mut file = if resumed > 0 {
         fs::OpenOptions::new()
             .append(true)
@@ -275,7 +304,20 @@ async fn ensure_binary(binary: &Path) -> Result<(), String> {
     let archive = dir.join(BINARY_ASSET);
     let have_archive = fs::metadata(&archive).map(|m| m.len()).unwrap_or(0) == BINARY_SIZE;
     if !have_archive {
-        download(None, &binary_url(), &archive, BINARY_SIZE).await?;
+        let mut last = String::from("no URL tried");
+        let mut downloaded = false;
+        for url in binary_urls() {
+            match download(None, &url, &archive, BINARY_SIZE).await {
+                Ok(()) => {
+                    downloaded = true;
+                    break;
+                }
+                Err(err) => last = err,
+            }
+        }
+        if !downloaded {
+            return Err(last);
+        }
     }
     extract(&archive, dir)?;
 
