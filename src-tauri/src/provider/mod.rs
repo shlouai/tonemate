@@ -150,6 +150,10 @@ struct Scene {
     /// `en` in the menu only, never matched against (the model echoes the whole
     /// line back, so matching is done on `en` alone).
     en_hint: &'static str,
+    /// What the Chinese name means, in the terms the model keys off. The Chinese
+    /// menu mirrors the English one — the bare name alone sent technical text to
+    /// 商务正式/客服礼貌, so Chinese gets its own gloss too.
+    zh_hint: &'static str,
     /// `label` is what the bar shows; `style` is the register the model is asked
     /// for. The English wording is deliberate: asking for Chinese tone names
     /// (直白/委婉/客气) came back nearly identical, while these English
@@ -164,6 +168,7 @@ const SCENES: [Scene; 5] = [
         name: "职场交流",
         en: "workplace communication",
         en_hint: "colleagues, meetings, tasks",
+        zh_hint: "同事、会议、任务",
         tones: [
             ("直白", "blunt and direct, as a bare command"),
             ("委婉", "soft and polite, like asking a favor"),
@@ -174,6 +179,7 @@ const SCENES: [Scene; 5] = [
         name: "日常对话",
         en: "daily conversation",
         en_hint: "casual chat with friends",
+        zh_hint: "和朋友闲聊",
         tones: [
             ("随口", "casual and friendly, like chatting with a friend"),
             ("直白", "blunt and direct"),
@@ -184,6 +190,7 @@ const SCENES: [Scene; 5] = [
         name: "技术文档",
         en: "technical documentation",
         en_hint: "specs, README, code, API docs",
+        zh_hint: "规格、README、代码、API 文档",
         tones: [
             ("简洁", "concise, in as few words as possible"),
             ("正式", "formal and precise"),
@@ -194,6 +201,7 @@ const SCENES: [Scene; 5] = [
         name: "商务正式",
         en: "business formal",
         en_hint: "contracts, payment terms, official letters",
+        zh_hint: "合同、付款条款、正式信函",
         tones: [
             ("正式", "formal and courteous"),
             ("谦敬", "deferential and polite"),
@@ -204,6 +212,7 @@ const SCENES: [Scene; 5] = [
         name: "客服礼貌",
         en: "customer service",
         en_hint: "apologies, complaints, support",
+        zh_hint: "致歉、投诉、支持",
         tones: [
             ("客气", "polite and friendly"),
             ("歉意", "apologetic and sincere"),
@@ -564,23 +573,35 @@ pub async fn translate(
 /// inventing a register itself is not.
 ///
 /// The prompt is in the input's own language: Chinese for Chinese text, English
-/// otherwise. The "kind of text" framing rather than "which scene" matters for
-/// the English side — "which scene" sent English technical text to 职场交流,
-/// while "what kind of text, by its topic" reads the content instead of the
-/// social situation.
+/// otherwise. The "kind of text" framing rather than "which scene" matters on
+/// both sides — "which scene" sent English technical text to 职场交流, and the
+/// bare Chinese names sent Chinese technical text to 商务正式/客服礼貌, while
+/// "what kind of text, by its topic" (with a per-scene gloss) reads the content
+/// instead of the social situation.
 async fn classify_tones(
     endpoint: &openai_compat::Endpoint,
     text: &str,
 ) -> [(&'static str, &'static str); 3] {
-    let prompt = match Direction::detect(text) {
+    let prompt = classify_prompt(text);
+    match openai_compat::converse(endpoint, "", &prompt, 64, |_| {}).await {
+        Ok((reply, _)) => tones_for(&reply).unwrap_or(SCENES[0].tones),
+        Err(_) => SCENES[0].tones,
+    }
+}
+
+/// The classification prompt, in the input's own language: "what kind of text"
+/// with a per-scene gloss. The gloss matters — a bare name in either language is
+/// not enough for a 0.5B model to tell 技术文档 from 商务正式/客服礼貌.
+fn classify_prompt(text: &str) -> String {
+    match Direction::detect(text) {
         Direction::FromChinese => {
             let menu = SCENES
                 .iter()
-                .map(|scene| format!("- {}", scene.name))
+                .map(|scene| format!("- {}（{}）", scene.name, scene.zh_hint))
                 .collect::<Vec<_>>()
                 .join("\n");
             format!(
-                "下面这句话最可能出现在哪种场景？从下面的选项里选一个，只输出该场景的名称，不要输出任何其他内容。\n{menu}\n\n句子：{text}"
+                "下面这段话是什么类型的文本？从下面的选项里选一个，只输出该选项的名称，不要输出任何其他内容。\n{menu}\n\n文本：{text}"
             )
         }
         Direction::Other => {
@@ -593,10 +614,6 @@ async fn classify_tones(
                 "What kind of text is the following? Choose one label from the list and output only that label.\n{menu}\n\nText: {text}"
             )
         }
-    };
-    match openai_compat::converse(endpoint, "", &prompt, 64, |_| {}).await {
-        Ok((reply, _)) => tones_for(&reply).unwrap_or(SCENES[0].tones),
-        Err(_) => SCENES[0].tones,
     }
 }
 
@@ -850,5 +867,24 @@ mod tests {
         assert_eq!(tones[1].0, "正式");
         assert_eq!(tones[2].0, "易懂");
         assert!(tones_for("Technical Documentation").is_some());
+    }
+
+    /// The Chinese classification prompt uses the "kind of text" framing and a
+    /// per-scene gloss — the bare names and "which scene" framing sent technical
+    /// text to 商务正式/客服礼貌.
+    #[test]
+    fn the_chinese_classification_prompt_glosses_each_scene() {
+        let prompt = classify_prompt("默认使用 Qwen2.5-0.5B 本地运行。");
+        assert!(prompt.contains("什么类型的文本"));
+        assert!(prompt.contains("技术文档（规格、README、代码、API 文档）"));
+        assert!(!prompt.contains("哪种场景"));
+    }
+
+    /// The English classification prompt keeps its own names and glosses.
+    #[test]
+    fn the_english_classification_prompt_glosses_each_scene() {
+        let prompt = classify_prompt("Qwen2.5 is the latest series of Qwen models.");
+        assert!(prompt.contains("What kind of text"));
+        assert!(prompt.contains("technical documentation (specs, README, code, API docs)"));
     }
 }
