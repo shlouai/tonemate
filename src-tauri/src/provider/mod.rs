@@ -131,6 +131,34 @@ const SYSTEM_PROMPT_BODY: &str =
 // that a tab would be invisible here; that confused a pasted tab byte with the escape, and cost us
 // a model that copied the notation instead of obeying it.
 
+/// The tones the local model is asked for. Hy-MT2 is a translation model, not an
+/// instruction-following one: it ignores the shared prompt's "give 3–5 tones"
+/// instruction (and, measured, register hints sent as a *system* prompt) and
+/// returns a single translation. So the local path asks once per tone, embedding
+/// the register in the user message — the only place Hy-MT2 attends to it — and
+/// assembles the rows itself.
+///
+/// `label` is what the bar shows; `style` is the English register the model is
+/// asked for. The English wording matters: the official 风格 format with Chinese
+/// tone names (直白/委婉/客气) came back nearly identical, while these English
+/// descriptors diverge reliably.
+const LOCAL_TONES: [(&str, &str); 3] = [
+    ("直白", "blunt and direct"),
+    ("委婉", "soft and polite"),
+    ("正式", "formal and courteous"),
+];
+
+/// The per-tone prompt for the local model. Everything rides in the user message
+/// because Hy-MT2 has no default system prompt. The target is fixed from the
+/// direction this app already computes.
+fn local_tone_prompt(text: &str, style: &str) -> String {
+    let target = match Direction::detect(text) {
+        Direction::FromChinese => "英文",
+        Direction::Other => "中文",
+    };
+    format!("请把下面这句话翻译成{target}，语气要{style}：\n{text}")
+}
+
 /// Four or five renderings of the same input, so roughly five times the budget
 /// one translation needed.
 const MAX_TOKENS: i32 = 4096;
@@ -441,10 +469,7 @@ pub async fn translate(
             .await
         }
         Provider::Local { model, binary } => match local::ensure_server(model, binary).await {
-            Ok(endpoint) => {
-                openai_compat::converse(&endpoint, &prompt_for(text), text, MAX_TOKENS as u32, on_delta)
-                    .await
-            }
+            Ok(endpoint) => local_translate(&endpoint, text, on_delta).await,
             Err(err) => Err(err),
         },
     };
@@ -454,6 +479,32 @@ pub async fn translate(
     result
         .map(|_| ())
         .map_err(|err| format!("{}: {err}", provider.label()))
+}
+
+/// The local model's translation: one request per tone, assembled into the same
+/// tab-delimited lines the shared prompt produces, so the streaming parser and
+/// the frontend see no difference. Each tone emits its label before its
+/// translation streams, matching how the parser fixes a row's label on the tab.
+async fn local_translate(
+    endpoint: &openai_compat::Endpoint,
+    text: &str,
+    mut on_delta: impl FnMut(&str),
+) -> Result<(String, Option<String>), String> {
+    for (label, style) in LOCAL_TONES {
+        let prompt = local_tone_prompt(text, style);
+        let mut labelled = false;
+        openai_compat::converse(endpoint, "", &prompt, MAX_TOKENS as u32, |fragment| {
+            if !labelled {
+                on_delta(&format!("{label}\t"));
+                labelled = true;
+            }
+            on_delta(fragment);
+        })
+        .await?;
+        on_delta("\n");
+    }
+    // The rows are already streamed to `on_delta`; nothing is collected here.
+    Ok((String::new(), None))
 }
 
 #[cfg(test)]
@@ -617,5 +668,23 @@ mod tests {
         let prompt = prompt_for("Could you review this by Friday?");
         assert!(prompt.contains("If it is English, every line you output must be in Chinese"));
         assert!(prompt.contains("otherwise every line you output must be in English"));
+    }
+
+    /// The local model can't be steered by a system prompt, so the register and
+    /// target ride in the user message. The English descriptor must be there —
+    /// it's what makes the tones actually diverge — alongside the source text.
+    #[test]
+    fn the_local_tone_prompt_embeds_target_style_and_text() {
+        let prompt = local_tone_prompt("我明天不能来了", "blunt and direct");
+        assert!(prompt.contains("翻译成英文"), "Chinese in → English out: {prompt}");
+        assert!(prompt.contains("blunt and direct"), "the register goes in the user message: {prompt}");
+        assert!(prompt.ends_with("我明天不能来了"), "the source text follows: {prompt}");
+    }
+
+    #[test]
+    fn the_local_tone_prompt_targets_chinese_for_non_chinese_input() {
+        let prompt = local_tone_prompt("Could you review this by Friday?", "soft and polite");
+        assert!(prompt.contains("翻译成中文"), "non-Chinese in → Chinese out: {prompt}");
+        assert!(prompt.contains("soft and polite"));
     }
 }
