@@ -124,7 +124,7 @@ Kimi/DeepSeek/Qwen arms of `provider/mod.rs` are untouched.
   process-lifetime static; a spawn is skipped when `/health` already answers on
   the port (a stale server from a crash is reused rather than fought). The child
   is killed on app exit.
-- **`ensure_ready(app) -> Result<Endpoint, String>`** — the single entry point
+- **`ensure_server(model, binary) -> Result<Endpoint, String>`** — the single entry point
   the translation path calls: model present? binary present? server healthy
   (poll `/health` until it answers or a timeout)? Then return the
   `openai_compat::Endpoint`. Any missing piece becomes a readable error ("本地模型
@@ -132,12 +132,15 @@ Kimi/DeepSeek/Qwen arms of `provider/mod.rs` are untouched.
 
 ### provider/mod.rs
 
-- `enum Provider` gains `Local` (a unit variant — path and server are resolved
-  lazily, not held).
-- `choose` gains a `"local" => Provider::Local` arm, no fallback.
+- `enum Provider` gains `Local { model: PathBuf, binary: PathBuf }` — resolved
+  once in `from_settings` via `app.path().app_data_dir()` and held, so
+  `translate`/`warm` keep their AppHandle-free signatures and the
+  `examples/translate.rs` path keeps working through env vars.
+- `from_settings` intercepts `"local"` before `choose` and builds the variant;
+  `choose` is left untouched (it is string-only, and local needs the app handle).
 - `label()` returns `"local"`.
 - `warm(Local)` checks the model file exists and returns; it does **not** spawn
-  or load. `translate(Local)` calls `local::ensure_ready` then
+  or load. `translate(Local)` calls `local::ensure_server` then
   `openai_compat::converse` against the returned endpoint with
   `max_tokens_field: "max_tokens"`, empty `api_key`, empty `extra`.
 
@@ -197,7 +200,9 @@ reachable from the development machine.
 - No `tauri-plugin-shell`: the binary is downloaded, not an `externalBin`
   sidecar, so it is spawned with `std::process::Command` and polled with the
   existing `reqwest` client.
-- No new Rust crates. `std::process::Command` covers spawn/kill; `reqwest`
+- `zip = "2"`, `flate2 = "1"`, `tar = "0.4"` extract the llama.cpp archive (zip
+  on Windows, tar.gz on macOS); `tokio` gains the `"time"` feature for the
+  `/health` poll backoff. `std::process::Command` covers spawn/kill; `reqwest`
   covers download and the `/health` poll.
 
 ## Testing
@@ -207,8 +212,8 @@ Pure, unit-testable pieces first:
 - `settings.rs` — `provider = "local"` round-trips; a pre-provider file still
   reads with the default; `provider_config` reports `local_model_state` from the
   filesystem (a temp dir stands in for `app_data_dir`).
-- `provider/mod.rs` — `choose("local", …)` yields `Provider::Local` with no key
-  and no fallback; `label()`.
+- `provider/mod.rs` — `label()` returns `"local"`; `from_settings`'s local
+  branch yields `Provider::Local` (verified live, since it needs the app handle).
 - The downloader's `Range`/resume arithmetic as a pure function (existing length,
   response status → offset to resume from, or start over).
 
