@@ -5,6 +5,7 @@
 //! drift would look like a model difference.
 
 pub(crate) mod bedrock;
+pub(crate) mod local;
 pub(crate) mod openai_compat;
 mod sse;
 
