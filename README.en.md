@@ -105,6 +105,8 @@ Pick **Local model (Qwen2.5-0.5B)** in Settings → Translation service to trans
 Selecting it for the first time downloads the model automatically (~469 MB, Q4_K_M, via the `hf-mirror.com` mirror); the download is resumable.
 Translation runs locally through llama.cpp, which prepares its runtime on the first translation (a few seconds). Both the model and the runtime fall back to mirrors automatically when their official host is unreachable — no manual configuration needed.
 
+The local model first classifies the input into a scene (workplace communication / daily conversation / technical documentation / business formal / customer service), then translates it in the three tones predefined for that scene.
+
 The local model is the default; it downloads automatically on first launch, and nothing is downloaded unless you select it.
 
 Available environment variables:
