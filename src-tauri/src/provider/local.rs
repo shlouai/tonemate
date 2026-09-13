@@ -432,6 +432,15 @@ pub(super) async fn ensure_server(model: &Path, binary: &Path) -> Result<Endpoin
     }
     *guard = None;
     let mut cmd = std::process::Command::new(binary);
+    // llama-server is a console-subsystem binary: on Windows, spawning it from
+    // this GUI process would otherwise allocate a fresh console window that
+    // flashes on screen and fills with its startup logs.
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd.arg("--model")
         .arg(model)
         .arg("--host")
