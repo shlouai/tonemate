@@ -9,6 +9,8 @@ pub(crate) mod local;
 pub(crate) mod openai_compat;
 mod sse;
 
+use std::path::PathBuf;
+
 use tauri::AppHandle;
 
 /// Which way a translation runs. Decided in Rust rather than inferred by the
@@ -177,6 +179,7 @@ pub enum Provider {
     Kimi(String),
     DeepSeek(String),
     Qwen(String),
+    Local { model: PathBuf, binary: PathBuf },
 }
 
 /// Which provider a stored setting pair means. Split out from `from_settings`
@@ -222,6 +225,12 @@ impl Provider {
     /// empty key means "not configured yet", which is not the same as a key the
     /// service rejected.
     pub fn from_settings(app: &AppHandle) -> Self {
+        if crate::settings::provider_name(app) == "local" {
+            return Provider::Local {
+                model: local::model_path(app),
+                binary: local::binary_path(app),
+            };
+        }
         choose(
             &crate::settings::provider_name(app),
             &crate::settings::kimi_api_key(app),
@@ -234,6 +243,14 @@ impl Provider {
     /// The provider `examples/translate.rs` should use. It has no `AppHandle`,
     /// so it configures itself from the environment instead of from settings.
     pub fn from_env() -> Self {
+        if let Ok(path) = std::env::var("TONEMATE_LOCAL_MODEL_PATH") {
+            if !path.is_empty() {
+                return Provider::Local {
+                    model: path.into(),
+                    binary: env_or("TONEMATE_LOCAL_BINARY_PATH", "llama-server").into(),
+                };
+            }
+        }
         match std::env::var("TONEMATE_KIMI_API_KEY") {
             Ok(key) if !key.is_empty() => Provider::Kimi(key),
             _ => match std::env::var("TONEMATE_DEEPSEEK_API_KEY") {
@@ -254,6 +271,7 @@ impl Provider {
             Provider::Kimi(_) => "kimi",
             Provider::DeepSeek(_) => "deepseek",
             Provider::Qwen(_) => "qwen",
+            Provider::Local { .. } => "local",
         }
     }
 
@@ -371,6 +389,13 @@ pub async fn warm(provider: &Provider) -> Result<(), String> {
                 Err(err) => Err(err),
             }
         }
+        Provider::Local { model, .. } => {
+            if model.exists() {
+                Ok(())
+            } else {
+                Err("本地模型未下载，请先在设置中选择「本地模型」".to_string())
+            }
+        }
     };
 
     result.map_err(|err| format!("{}: {err}", provider.label()))
@@ -415,6 +440,13 @@ pub async fn translate(
             )
             .await
         }
+        Provider::Local { model, binary } => match local::ensure_server(model, binary).await {
+            Ok(endpoint) => {
+                openai_compat::converse(&endpoint, &prompt_for(text), text, MAX_TOKENS as u32, on_delta)
+                    .await
+            }
+            Err(err) => Err(err),
+        },
     };
 
     // Prefixed here rather than in each transport, so every provider's failures
@@ -505,6 +537,15 @@ mod tests {
             Provider::Bedrock(profile) => assert_eq!(profile, "corp"),
             _ => panic!("expected Bedrock with the stored profile"),
         }
+    }
+
+    #[test]
+    fn local_is_a_provider_with_a_label() {
+        let provider = Provider::Local {
+            model: PathBuf::new(),
+            binary: PathBuf::new(),
+        };
+        assert_eq!(provider.label(), "local");
     }
 
     #[test]
