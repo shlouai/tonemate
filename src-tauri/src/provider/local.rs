@@ -107,9 +107,14 @@ fn state_string(size_on_disk: u64, downloading: bool) -> String {
 }
 
 pub fn model_state(app: &AppHandle) -> String {
-    match &*DOWNLOAD_STATE.lock().unwrap() {
-        DownloadState::Error(_) => "error".to_string(),
-        _ => state_string(model_size(app), is_downloading()),
+    let is_error = {
+        let guard = DOWNLOAD_STATE.lock().unwrap();
+        matches!(*guard, DownloadState::Error(_))
+    };
+    if is_error {
+        "error".to_string()
+    } else {
+        state_string(model_size(app), is_downloading())
     }
 }
 
@@ -161,7 +166,7 @@ async fn download(
         return Ok(());
     }
 
-    let mut response = reqwest::Client::new()
+    let response = reqwest::Client::new()
         .get(url)
         .header("Range", format!("bytes={existing}-"))
         .send()
@@ -207,6 +212,10 @@ async fn download(
 pub async fn ensure_model_downloaded(app: &AppHandle) -> Result<(), String> {
     if model_size(app) == MODEL_SIZE {
         return Ok(());
+    }
+    let model = model_path(app);
+    if let Some(dir) = model.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     *DOWNLOAD_STATE.lock().unwrap() = DownloadState::Downloading;
 
@@ -334,7 +343,7 @@ async fn poll_healthy(port: u16) -> Result<(), String> {
 
 /// Ensures the model and binary are present and the server is running, and
 /// returns the OpenAI-compatible endpoint to talk to.
-pub async fn ensure_server(model: &Path, binary: &Path) -> Result<Endpoint, String> {
+pub(super) async fn ensure_server(model: &Path, binary: &Path) -> Result<Endpoint, String> {
     if !model.exists() {
         return Err("本地模型尚未下载，请先在设置中选择「本地模型」触发下载".to_string());
     }
