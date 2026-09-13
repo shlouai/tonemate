@@ -165,6 +165,17 @@ pub fn run() {
             // registered, and by the time anyone types, the provider is reachable.
             let warm_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                // A stored local provider means a download may be stalled from a
+                // previous run. `warm` only logs a missing model; resuming is
+                // this branch's job, mirroring `set_provider`'s local path.
+                if crate::settings::provider_name(&warm_handle) == "local" {
+                    if let Err(err) =
+                        crate::provider::local::ensure_model_downloaded(&warm_handle).await
+                    {
+                        eprintln!("[tonemate] model download failed: {err}");
+                    }
+                    return;
+                }
                 let chosen = provider::Provider::from_settings(&warm_handle);
                 match provider::warm(&chosen).await {
                     Ok(()) => println!("[tonemate] {} warm", chosen.label()),

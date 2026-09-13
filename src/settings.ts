@@ -79,9 +79,17 @@ async function wireProvider() {
       render();
     },
   );
-  void listen("model:download-done", () => {
+  void listen("model:download-done", async () => {
     localProgress = null;
-    config = { ...config, local_model_state: "downloaded" };
+    // The size was read once when this window opened, so a model that finishes
+    // downloading while it is open would otherwise render as "已就绪（0 MB）".
+    // Ask the backend for the fresh config, which carries the real size.
+    config = await invoke<ProviderConfig>("provider_config")
+      .then((fresh) => ({ ...fresh, local_model_state: "downloaded" }))
+      .catch((error) => {
+        console.error(error);
+        return { ...config, local_model_state: "downloaded" };
+      });
     render();
   });
   void listen<{ message: string }>("model:download-error", ({ payload }) => {

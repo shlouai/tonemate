@@ -151,12 +151,18 @@ async fn download(
     total: u64,
 ) -> Result<(), String> {
     let part = PathBuf::from(format!("{}.part", dest.display()));
-    let existing = fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+    let mut existing = fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
 
-    // Fully downloaded but the rename never ran (a crash at the very end).
-    if existing >= total {
+    // Promote only a byte-exact `.part` (a rename that never ran after a crash
+    // at the very end). An oversized one is corrupt — an old concurrent
+    // download's interleaved chunks — so drop it and restart clean below.
+    if existing == total {
         fs::rename(&part, dest).map_err(|e| e.to_string())?;
         return Ok(());
+    }
+    if existing > total {
+        fs::remove_file(&part).map_err(|e| e.to_string())?;
+        existing = 0;
     }
 
     let response = reqwest::Client::new()
@@ -210,7 +216,18 @@ pub async fn ensure_model_downloaded(app: &AppHandle) -> Result<(), String> {
     if let Some(dir) = model.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    *DOWNLOAD_STATE.lock().unwrap() = DownloadState::Downloading;
+    // Claim the download under the lock so a second caller (toggling the radio
+    // away and back mid-download) returns instead of streaming a second writer
+    // into the same `.part`. Only `Downloading` blocks: a prior `Error` must
+    // still allow the retry that re-selecting the provider is. Claimed after
+    // `create_dir_all` so a failed dir create can't leave the flag stuck.
+    {
+        let mut guard = DOWNLOAD_STATE.lock().unwrap();
+        if matches!(*guard, DownloadState::Downloading) {
+            return Ok(());
+        }
+        *guard = DownloadState::Downloading;
+    }
 
     let result = async {
         let mut last = String::from("no URL tried");
@@ -288,7 +305,18 @@ fn extract(archive: &Path, dest: &Path) -> Result<(), String> {
             let mut components = path.components();
             components.next();
             let stripped: PathBuf = components.collect();
-            if stripped.as_os_str().is_empty() {
+            // Reject nothing and strange prefixes the same way `ZipArchive`'s
+            // extract does, so a crafted entry cannot climb out of `dest`.
+            if stripped.as_os_str().is_empty()
+                || stripped.components().any(|c| {
+                    matches!(
+                        c,
+                        std::path::Component::ParentDir
+                            | std::path::Component::RootDir
+                            | std::path::Component::Prefix(_)
+                    )
+                })
+            {
                 continue;
             }
             entry.unpack(dest.join(&stripped)).map_err(|e| e.to_string())?;
@@ -344,36 +372,57 @@ pub(super) async fn ensure_server(model: &Path, binary: &Path) -> Result<Endpoin
 
     let port = port();
     let mut guard = SERVER.lock().await;
-    if guard.is_none() || !healthy(port).await {
-        let mut cmd = std::process::Command::new(binary);
-        cmd.arg("--model")
-            .arg(model)
-            .arg("--host")
-            .arg("127.0.0.1")
-            .arg("--port")
-            .arg(port.to_string())
-            .arg("--ctx-size")
-            .arg("8192");
-        let ngl = env_or("TONEMATE_LOCAL_N_GPU_LAYERS", "0");
-        if ngl != "0" {
-            cmd.arg("--n-gpu-layers").arg(ngl);
-        }
-        let child = cmd.spawn().map_err(|e| format!("启动 llama-server 失败：{e}"))?;
-        *guard = Some(child);
-        poll_healthy(port).await?;
+    if guard.is_some() && healthy(port).await {
+        return Ok(endpoint(port));
     }
-    Ok(endpoint(port))
-}
-
-/// Kills the llama-server child so it does not outlive the app.
-pub fn kill_server() {
-    if let Ok(mut guard) = SERVER.try_lock() {
+    // Replace any stale child rather than leaking it: a `poll_healthy` timeout
+    // used to leave the child in the slot for the next call to overwrite,
+    // dropping it un-killed and unreaped (a zombie plus a port race).
+    if let Some(child) = guard.as_mut() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    *guard = None;
+    let mut cmd = std::process::Command::new(binary);
+    cmd.arg("--model")
+        .arg(model)
+        .arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("--ctx-size")
+        .arg("8192");
+    let ngl = env_or("TONEMATE_LOCAL_N_GPU_LAYERS", "0");
+    if ngl != "0" {
+        cmd.arg("--n-gpu-layers").arg(ngl);
+    }
+    let child = cmd.spawn().map_err(|e| format!("启动 llama-server 失败：{e}"))?;
+    *guard = Some(child);
+    // The lock stays held across the poll: it is what serialises concurrent
+    // `ensure_server` calls.
+    if let Err(err) = poll_healthy(port).await {
         if let Some(child) = guard.as_mut() {
             let _ = child.kill();
             let _ = child.wait();
         }
         *guard = None;
+        return Err(err);
     }
+    Ok(endpoint(port))
+}
+
+/// Kills the llama-server child so it does not outlive the app.
+///
+/// Sync-blocking rather than `try_lock`: this runs from the `RunEvent::Exit`
+/// handler, which is not an async task, and a `try_lock` would silently no-op
+/// while a spawn holds the lock (up to the 30 s health poll), leaking the child.
+pub fn kill_server() {
+    let mut guard = SERVER.blocking_lock();
+    if let Some(child) = guard.as_mut() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    *guard = None;
 }
 
 #[cfg(test)]
