@@ -104,6 +104,11 @@
                      secret, so it may show in full here. -->
                 <span class="note" id="bedrock-state"></span>
               </label>
+              <label>
+                <input type="radio" name="provider" value="local" />
+                <span class="name">本地模型 (Hy-MT2)</span>
+                <span class="note" id="local-state"></span>
+              </label>
             </div>
           </fieldset>
 
@@ -160,6 +165,14 @@
               />
             </div>
             <p class="hint" id="aws-hint"></p>
+          </div>
+
+          <div class="key" data-provider="local">
+            <label for="local-progress">模型下载</label>
+            <div class="progress" id="local-progress">
+              <div class="bar" id="local-bar"></div>
+            </div>
+            <p class="hint" id="local-hint"></p>
           </div>
 
           <p id="active"></p>

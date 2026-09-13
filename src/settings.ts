@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 
 const appWindow = getCurrentWindow();
 
@@ -11,6 +12,8 @@ type ProviderConfig = {
   deepseek_key_set: boolean;
   qwen_key_set: boolean;
   aws_profile: string;
+  local_model_state: string;
+  local_model_size: number;
 };
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -60,9 +63,35 @@ async function wireProvider() {
         deepseek_key_set: false,
         qwen_key_set: false,
         aws_profile: "",
+        local_model_state: "missing",
+        local_model_size: 0,
       };
     },
   );
+
+  let localProgress: { bytes: number; total: number } | null = null;
+
+  void listen<{ bytes: number; total: number }>(
+    "model:download-progress",
+    ({ payload }) => {
+      localProgress = payload;
+      config = { ...config, local_model_state: "downloading" };
+      render();
+    },
+  );
+  void listen("model:download-done", () => {
+    localProgress = null;
+    config = { ...config, local_model_state: "downloaded" };
+    render();
+  });
+  void listen<{ message: string }>("model:download-error", ({ payload }) => {
+    localProgress = null;
+    config = { ...config, local_model_state: "error" };
+    // The row already says the download failed; the reason only fits in the
+    // console. Read here rather than dropped so `tsc` does not call it unused.
+    console.error(payload.message);
+    render();
+  });
 
   render();
 
@@ -202,15 +231,57 @@ async function wireProvider() {
         config.provider === "kimi" ? "Kimi"
         : config.provider === "deepseek" ? "DeepSeek"
         : config.provider === "qwen" ? "Qwen"
+        : config.provider === "local" ? "本地模型 (Hy-MT2)"
         : "AWS Bedrock";
-      const keySet =
-        config.provider === "kimi" ? config.kimi_key_set
-        : config.provider === "deepseek" ? config.deepseek_key_set
-        : config.provider === "qwen" ? config.qwen_key_set
-        : true;
-      active.textContent = keySet
-        ? `当前使用: ${name}`
-        : `当前使用: AWS Bedrock —— 已选 ${name} 但未填 API Key`;
+
+      if (config.provider === "local") {
+        const s = config.local_model_state;
+        active.textContent =
+          s === "downloaded" ? `当前使用: ${name}`
+          : s === "downloading" ? `当前使用: ${name} —— 模型下载中`
+          : s === "error" ? `当前使用: ${name} —— 模型下载失败，重新选择可重试`
+          : `当前使用: ${name} —— 模型未下载`;
+      } else {
+        const keySet =
+          config.provider === "kimi" ? config.kimi_key_set
+          : config.provider === "deepseek" ? config.deepseek_key_set
+          : config.provider === "qwen" ? config.qwen_key_set
+          : true;
+        active.textContent = keySet
+          ? `当前使用: ${name}`
+          : `当前使用: AWS Bedrock —— 已选 ${name} 但未填 API Key`;
+      }
+    }
+
+    renderLocal();
+  }
+
+  /** Paints the local-model download state and progress bar. */
+  function renderLocal() {
+    const state = document.querySelector<HTMLElement>("#local-state");
+    const bar = document.querySelector<HTMLElement>("#local-bar");
+    const progress = document.querySelector<HTMLElement>("#local-progress");
+    const hint = document.querySelector<HTMLElement>("#local-hint");
+    if (!state || !bar || !progress || !hint) return;
+
+    const s = config.local_model_state;
+    state.textContent =
+      s === "downloaded" ? "已下载"
+      : s === "downloading" ? "下载中…"
+      : s === "error" ? "下载失败"
+      : "未下载";
+
+    if (s === "downloading" && localProgress) {
+      progress.hidden = false;
+      bar.style.width = `${(localProgress.bytes / localProgress.total) * 100}%`;
+      hint.textContent =
+        `已下载 ${(localProgress.bytes / 1048576).toFixed(0)} MB / ${(localProgress.total / 1048576).toFixed(0)} MB`;
+    } else {
+      progress.hidden = true;
+      hint.textContent =
+        s === "downloaded" ? `模型已就绪（${(config.local_model_size / 1048576).toFixed(0)} MB），翻译在本机完成。`
+        : s === "error" ? "下载失败，重新选择本地模型可重试。"
+        : "选择后自动下载约 440 MB 的模型。";
     }
   }
 }

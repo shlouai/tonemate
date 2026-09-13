@@ -299,3 +299,18 @@ p {
   margin: 6px 0 0;
   font-size: 12px;
 }
+
+.progress {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, CanvasText 12%, transparent);
+  overflow: hidden;
+}
+
+.progress .bar {
+  height: 100%;
+  width: 0;
+  background: CanvasText;
+  transition: width 0.15s linear;
+}
