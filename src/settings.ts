@@ -239,7 +239,7 @@ async function wireProvider() {
         config.provider === "kimi" ? "Kimi"
         : config.provider === "deepseek" ? "DeepSeek"
         : config.provider === "qwen" ? "Qwen"
-        : config.provider === "local" ? "本地模型 (Hy-MT2)"
+        : config.provider === "local" ? "本地模型 (Qwen2.5-0.5B)"
         : "AWS Bedrock";
 
       if (config.provider === "local") {
@@ -289,7 +289,7 @@ async function wireProvider() {
       hint.textContent =
         s === "downloaded" ? `模型已就绪（${(config.local_model_size / 1048576).toFixed(0)} MB），翻译在本机完成。`
         : s === "error" ? "下载失败，重新选择本地模型可重试。"
-        : "选择后自动下载约 440 MB 的模型。";
+        : "选择后自动下载约 469 MB 的模型。";
     }
   }
 }

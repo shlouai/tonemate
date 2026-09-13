@@ -18,9 +18,10 @@ use tauri::{AppHandle, Emitter, Manager};
 /// spelled as a colour: what the name paints is `src/palette.css`'s business.
 const DEFAULT_ACCENT: &str = "graphite";
 
-/// Bedrock is the default because it needs nothing typed in: an AWS profile in
-/// the environment is the setup this app started with.
-const DEFAULT_PROVIDER: &str = "bedrock";
+/// The local model is the default: it needs no key and no account, and the
+/// first launch downloads it automatically. A stored provider always wins over
+/// this default.
+const DEFAULT_PROVIDER: &str = "local";
 
 /// Sits in the app's config directory, next to nothing else for now.
 const FILE: &str = "settings.json";
@@ -33,7 +34,7 @@ const FILE: &str = "settings.json";
 #[serde(default)]
 struct Stored {
     accent: String,
-    /// `"bedrock"`, `"kimi"`, `"deepseek"`, or `"qwen"`. A string rather than an
+    /// `"local"`, `"bedrock"`, `"kimi"`, `"deepseek"`, or `"qwen"`. A string rather than an
     /// enum so a name written by a later version survives a round trip through
     /// this one instead of taking the whole file down with it.
     provider: String,

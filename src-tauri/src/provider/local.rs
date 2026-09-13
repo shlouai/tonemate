@@ -17,20 +17,20 @@ use super::env_or;
 /// The model weights, downloaded from Hugging Face (a mirror first — the
 /// canonical host is not reachable from everywhere).
 ///
-/// This is the *standard* Q4_K_M quantization. Tencent's 1.25-bit ("Sherry")
-/// weights depend on the STQ1_0 ternary kernel, which is still an unmerged
-/// llama.cpp PR (#22836) — no prebuilt `llama-server` can load it — so the
-/// app ships the standard quantization instead.
-const MODEL_FILE: &str = "Hy-MT2-1.8B-Q4_K_M.gguf";
-const MODEL_SIZE: u64 = 1_133_080_448;
+/// Qwen2.5-0.5B-Instruct in its standard Q4_K_M quantization: small enough to
+/// run on CPU, and an instruction-following model, so it answers the shared
+/// multi-tone prompt directly instead of needing the per-tone workaround a
+/// translation-only model required.
+const MODEL_FILE: &str = "qwen2.5-0.5b-instruct-q4_k_m.gguf";
+const MODEL_SIZE: u64 = 491_400_032;
 const MODEL_URLS: [&str; 2] = [
-    "https://hf-mirror.com/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
-    "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+    "https://hf-mirror.com/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
 ];
 
-/// The llama.cpp release this build pins. It must be recent enough to carry
-/// the `hunyuan-dense` architecture (with its `attn_k_norm`/`attn_q_norm`
-/// tensors) that Hy-MT2 uses.
+/// The llama.cpp release this build pins. Qwen2.5 uses the plain Qwen2
+/// architecture, which every recent release carries; the tag is pinned simply
+/// so the expected archive size stays stable.
 const LLAMA_CPP_TAG: &str = "b10936";
 
 /// The archive holding llama.cpp for this platform, and its expected size.

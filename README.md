@@ -87,11 +87,12 @@ pnpm tauri dev
 
 ## 翻译服务
 
-tonemate 默认使用 **AWS Bedrock**；你也可以在设置里切换成别的服务：
+tonemate 默认使用**本地模型（离线翻译）**；你也可以在设置里切换成别的服务：
 
 | 服务 | 需要什么 |
 | --- | --- |
-| AWS Bedrock | 默认。需要本机已配置能调用 Bedrock 的 AWS 凭证 |
+| 本地模型 | 默认。无需配置，首次使用自动下载模型 |
+| AWS Bedrock | 需要本机已配置能调用 Bedrock 的 AWS 凭证 |
 | DeepSeek | 一个 API Key（[platform.deepseek.com](https://platform.deepseek.com)） |
 | Qwen | 一个 API Key（[百炼 / 阿里云 Model Studio](https://www.alibabacloud.com/help/en/model-studio)） |
 | Kimi | 一个 API Key（[platform.moonshot.cn](https://platform.moonshot.cn)） |
@@ -100,11 +101,11 @@ tonemate 默认使用 **AWS Bedrock**；你也可以在设置里切换成别的�
 
 ### 本地模型（离线翻译）
 
-在 设置 → 翻译服务 中选择「本地模型 (Hy-MT2)」即可离线翻译，文本不离开本机。
-首次选择会自动下载约 1.1 GB 的模型（Q4_K_M 量化，通过 `hf-mirror.com` 镜像）；下载支持断点续传。
+在 设置 → 翻译服务 中选择「本地模型 (Qwen2.5-0.5B)」即可离线翻译，文本不离开本机。
+首次选择会自动下载约 469 MB 的模型（Q4_K_M 量化，通过 `hf-mirror.com` 镜像）；下载支持断点续传。
 翻译在本机通过 llama.cpp 运行，首次翻译时会自动准备运行时（约几秒）。模型和运行时都自带镜像回退——官方源无法访问时自动换用镜像，无需手动配置。
 
-默认仍是 AWS Bedrock；未选择本地模型时不会下载任何东西。
+默认就是本地模型，首次启动会自动下载；未选择本地模型时不会下载任何东西。
 
 可用环境变量：
 

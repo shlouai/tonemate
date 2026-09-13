@@ -131,26 +131,102 @@ const SYSTEM_PROMPT_BODY: &str =
 // that a tab would be invisible here; that confused a pasted tab byte with the escape, and cost us
 // a model that copied the notation instead of obeying it.
 
-/// The tones the local model is asked for. Hy-MT2 is a translation model, not an
-/// instruction-following one: it ignores the shared prompt's "give 3–5 tones"
-/// instruction (and, measured, register hints sent as a *system* prompt) and
-/// returns a single translation. So the local path asks once per tone, embedding
-/// the register in the user message — the only place Hy-MT2 attends to it — and
-/// assembles the rows itself.
-///
-/// `label` is what the bar shows; `style` is the English register the model is
-/// asked for. The English wording matters: the official 风格 format with Chinese
-/// tone names (直白/委婉/客气) came back nearly identical, while these English
-/// descriptors diverge reliably.
-const LOCAL_TONES: [(&str, &str); 3] = [
-    ("直白", "blunt and direct"),
-    ("委婉", "soft and polite"),
-    ("正式", "formal and courteous"),
+/// One scene the local model classifies an input into, plus the three tones that
+/// scene maps to. Qwen2.5-0.5B is too small to abstract a register itself
+/// (measured: asked to emit 3–5 tones in one response it collapses to a single
+/// bare translation, dropping the labels and tabs), but it *can* pick a scene
+/// from a fixed list. So the local path classifies first, then asks once per
+/// tone — one request per register — using the scene's pre-defined trio.
+struct Scene {
+    /// The Chinese name, shown in the menu for Chinese input and matched against
+    /// the reply.
+    name: &'static str,
+    /// The English name, shown in the menu for non-Chinese input and matched
+    /// against the reply. The model maps each language's text to its own scene
+    /// names — measured: English technical text went to 职场交流 under a Chinese
+    /// menu, so the English menu has its own names.
+    en: &'static str,
+    /// What the English name means, in the terms the model keys off. Appended to
+    /// `en` in the menu only, never matched against (the model echoes the whole
+    /// line back, so matching is done on `en` alone).
+    en_hint: &'static str,
+    /// `label` is what the bar shows; `style` is the register the model is asked
+    /// for. The English wording is deliberate: asking for Chinese tone names
+    /// (直白/委婉/客气) came back nearly identical, while these English
+    /// descriptors — several of which hint at grammatical form — diverge.
+    tones: [(&'static str, &'static str); 3],
+}
+
+/// The first scene is also the fallback when classification fails — its trio is
+/// the 直白/委婉/正式 the app has always offered.
+const SCENES: [Scene; 5] = [
+    Scene {
+        name: "职场交流",
+        en: "workplace communication",
+        en_hint: "colleagues, meetings, tasks",
+        tones: [
+            ("直白", "blunt and direct, as a bare command"),
+            ("委婉", "soft and polite, like asking a favor"),
+            ("正式", "formal and courteous"),
+        ],
+    },
+    Scene {
+        name: "日常对话",
+        en: "daily conversation",
+        en_hint: "casual chat with friends",
+        tones: [
+            ("随口", "casual and friendly, like chatting with a friend"),
+            ("直白", "blunt and direct"),
+            ("客气", "polite and friendly, like asking a favor"),
+        ],
+    },
+    Scene {
+        name: "技术文档",
+        en: "technical documentation",
+        en_hint: "specs, README, code, API docs",
+        tones: [
+            ("简洁", "concise, in as few words as possible"),
+            ("正式", "formal and precise"),
+            ("易懂", "in plain everyday words"),
+        ],
+    },
+    Scene {
+        name: "商务正式",
+        en: "business formal",
+        en_hint: "contracts, payment terms, official letters",
+        tones: [
+            ("正式", "formal and courteous"),
+            ("谦敬", "deferential and polite"),
+            ("直白", "direct and professional"),
+        ],
+    },
+    Scene {
+        name: "客服礼貌",
+        en: "customer service",
+        en_hint: "apologies, complaints, support",
+        tones: [
+            ("客气", "polite and friendly"),
+            ("歉意", "apologetic and sincere"),
+            ("正式", "formal and courteous"),
+        ],
+    },
 ];
 
-/// The per-tone prompt for the local model. Everything rides in the user message
-/// because Hy-MT2 has no default system prompt. The target is fixed from the
-/// direction this app already computes.
+/// The tones for a classified reply, or `None` when the reply names no known
+/// scene. Pure so it can be tested without a live model. Lowercased first so the
+/// English names match whether the model echoes them in the menu's own case or
+/// not.
+fn tones_for(reply: &str) -> Option<[(&'static str, &'static str); 3]> {
+    let reply = reply.to_lowercase();
+    SCENES
+        .iter()
+        .find(|scene| reply.contains(scene.name) || reply.contains(scene.en))
+        .map(|scene| scene.tones)
+}
+
+/// The per-tone prompt for the local model. The register and the target ride in
+/// the user message — the one place a small model reliably attends to — rather
+/// than in a system prompt it may ignore.
 fn local_tone_prompt(text: &str, style: &str) -> String {
     let target = match Direction::detect(text) {
         Direction::FromChinese => "英文",
@@ -481,16 +557,61 @@ pub async fn translate(
         .map_err(|err| format!("{}: {err}", provider.label()))
 }
 
-/// The local model's translation: one request per tone, assembled into the same
-/// tab-delimited lines the shared prompt produces, so the streaming parser and
-/// the frontend see no difference. Each tone emits its label before its
-/// translation streams, matching how the parser fixes a row's label on the tab.
+/// Asks the local model which scene the input belongs to, and returns the tones
+/// that scene maps to — the default trio when the model cannot be read. One
+/// extra round trip before the per-tone translations, spent because picking a
+/// scene from a fixed list is something a 0.5B model does reliably where
+/// inventing a register itself is not.
+///
+/// The prompt is in the input's own language: Chinese for Chinese text, English
+/// otherwise. The "kind of text" framing rather than "which scene" matters for
+/// the English side — "which scene" sent English technical text to 职场交流,
+/// while "what kind of text, by its topic" reads the content instead of the
+/// social situation.
+async fn classify_tones(
+    endpoint: &openai_compat::Endpoint,
+    text: &str,
+) -> [(&'static str, &'static str); 3] {
+    let prompt = match Direction::detect(text) {
+        Direction::FromChinese => {
+            let menu = SCENES
+                .iter()
+                .map(|scene| format!("- {}", scene.name))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "下面这句话最可能出现在哪种场景？从下面的选项里选一个，只输出该场景的名称，不要输出任何其他内容。\n{menu}\n\n句子：{text}"
+            )
+        }
+        Direction::Other => {
+            let menu = SCENES
+                .iter()
+                .map(|scene| format!("- {} ({})", scene.en, scene.en_hint))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "What kind of text is the following? Choose one label from the list and output only that label.\n{menu}\n\nText: {text}"
+            )
+        }
+    };
+    match openai_compat::converse(endpoint, "", &prompt, 64, |_| {}).await {
+        Ok((reply, _)) => tones_for(&reply).unwrap_or(SCENES[0].tones),
+        Err(_) => SCENES[0].tones,
+    }
+}
+
+/// The local model's translation: classify the scene, then one request per tone,
+/// assembled into the same tab-delimited lines the shared prompt produces, so the
+/// streaming parser and the frontend see no difference. Each tone emits its label
+/// before its translation streams, matching how the parser fixes a row's label on
+/// the tab.
 async fn local_translate(
     endpoint: &openai_compat::Endpoint,
     text: &str,
     mut on_delta: impl FnMut(&str),
 ) -> Result<(String, Option<String>), String> {
-    for (label, style) in LOCAL_TONES {
+    let tones = classify_tones(endpoint, text).await;
+    for (label, style) in tones {
         let prompt = local_tone_prompt(text, style);
         let mut labelled = false;
         openai_compat::converse(endpoint, "", &prompt, MAX_TOKENS as u32, |fragment| {
@@ -670,9 +791,10 @@ mod tests {
         assert!(prompt.contains("otherwise every line you output must be in English"));
     }
 
-    /// The local model can't be steered by a system prompt, so the register and
-    /// target ride in the user message. The English descriptor must be there —
-    /// it's what makes the tones actually diverge — alongside the source text.
+    /// The local model is not steered reliably by a system prompt, so the
+    /// register and target ride in the user message. The English descriptor must
+    /// be there — it's what makes the tones actually diverge — alongside the
+    /// source text.
     #[test]
     fn the_local_tone_prompt_embeds_target_style_and_text() {
         let prompt = local_tone_prompt("我明天不能来了", "blunt and direct");
@@ -686,5 +808,47 @@ mod tests {
         let prompt = local_tone_prompt("Could you review this by Friday?", "soft and polite");
         assert!(prompt.contains("翻译成中文"), "non-Chinese in → Chinese out: {prompt}");
         assert!(prompt.contains("soft and polite"));
+    }
+
+    /// A scene name the model returns must map back to the tones defined for it;
+    /// the first scene's trio is the pre-existing 直白/委婉/正式.
+    #[test]
+    fn a_known_scene_maps_to_its_tones() {
+        let tones = tones_for("职场交流").unwrap();
+        assert_eq!(tones[0].0, "直白");
+        assert_eq!(tones[1].0, "委婉");
+        assert_eq!(tones[2].0, "正式");
+    }
+
+    /// A reply that names no scene — the model wandered, or returned nothing —
+    /// resolves to the fallback rather than to an empty result.
+    #[test]
+    fn an_unknown_scene_matches_nothing() {
+        assert!(tones_for("不存在的场景").is_none());
+        assert!(tones_for("").is_none());
+    }
+
+    /// The three labels within a scene must stay distinct, or the rows the bar
+    /// shows would read as the same tone twice.
+    #[test]
+    fn every_scene_offers_three_distinct_tone_labels() {
+        for scene in &SCENES {
+            let labels: Vec<&str> = scene.tones.iter().map(|(label, _)| *label).collect();
+            let mut unique = labels.clone();
+            unique.sort_unstable();
+            unique.dedup();
+            assert_eq!(unique.len(), 3, "labels repeat within a scene: {labels:?}");
+        }
+    }
+
+    /// The English names are matched the same way as the Chinese ones — including
+    /// the gloss the model echoes back — and the match is case-insensitive.
+    #[test]
+    fn an_english_scene_name_maps_to_its_tones() {
+        let tones = tones_for("technical documentation (specs, README, code, API docs)").unwrap();
+        assert_eq!(tones[0].0, "简洁");
+        assert_eq!(tones[1].0, "正式");
+        assert_eq!(tones[2].0, "易懂");
+        assert!(tones_for("Technical Documentation").is_some());
     }
 }

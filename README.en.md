@@ -87,11 +87,12 @@ Click the icon → **Settings…** to open the settings window, which has two pa
 
 ## Translation services
 
-tonemate uses **AWS Bedrock** by default; you can switch to another service in settings:
+tonemate uses the **local model (offline)** by default; you can switch to another service in settings:
 
 | Service | What it needs |
 | --- | --- |
-| AWS Bedrock | Default. Needs AWS credentials on this machine that can call Bedrock |
+| Local model | Default. No setup; the model downloads automatically on first use |
+| AWS Bedrock | Needs AWS credentials on this machine that can call Bedrock |
 | DeepSeek | An API key ([platform.deepseek.com](https://platform.deepseek.com)) |
 | Qwen | An API key ([Model Studio](https://www.alibabacloud.com/help/en/model-studio)) |
 | Kimi | An API key ([platform.moonshot.cn](https://platform.moonshot.cn)) |
@@ -100,11 +101,11 @@ Choosing Kimi / DeepSeek / Qwen without a saved key falls back to Bedrock and sa
 
 ### Local model (offline translation)
 
-Pick **Local model (Hy-MT2)** in Settings → Translation service to translate offline, with your text never leaving this machine.
-Selecting it for the first time downloads the model automatically (~1.1 GB, Q4_K_M, via the `hf-mirror.com` mirror); the download is resumable.
+Pick **Local model (Qwen2.5-0.5B)** in Settings → Translation service to translate offline, with your text never leaving this machine.
+Selecting it for the first time downloads the model automatically (~469 MB, Q4_K_M, via the `hf-mirror.com` mirror); the download is resumable.
 Translation runs locally through llama.cpp, which prepares its runtime on the first translation (a few seconds). Both the model and the runtime fall back to mirrors automatically when their official host is unreachable — no manual configuration needed.
 
-The default is still AWS Bedrock; nothing is downloaded unless you select the local model.
+The local model is the default; it downloads automatically on first launch, and nothing is downloaded unless you select it.
 
 Available environment variables:
 
