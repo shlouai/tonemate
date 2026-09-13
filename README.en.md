@@ -101,7 +101,7 @@ Choosing Kimi / DeepSeek / Qwen without a saved key falls back to Bedrock and sa
 ### Local model (offline translation)
 
 Pick **Local model (Hy-MT2)** in Settings → Translation service to translate offline, with your text never leaving this machine.
-Selecting it for the first time downloads the model automatically (~440 MB, via the `hf-mirror.com` mirror); the download is resumable.
+Selecting it for the first time downloads the model automatically (~1.1 GB, Q4_K_M, via the `hf-mirror.com` mirror); the download is resumable.
 Translation runs locally through llama.cpp, which prepares its runtime on the first translation (a few seconds). Both the model and the runtime fall back to mirrors automatically when their official host is unreachable — no manual configuration needed.
 
 The default is still AWS Bedrock; nothing is downloaded unless you select the local model.

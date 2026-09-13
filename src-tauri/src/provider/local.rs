@@ -16,15 +16,21 @@ use super::env_or;
 
 /// The model weights, downloaded from Hugging Face (a mirror first — the
 /// canonical host is not reachable from everywhere).
-const MODEL_FILE: &str = "Hy-MT2-1.8B-1.25Bit.gguf";
-const MODEL_SIZE: u64 = 461_860_800;
+///
+/// This is the *standard* Q4_K_M quantization. Tencent's 1.25-bit ("Sherry")
+/// weights depend on the STQ1_0 ternary kernel, which is still an unmerged
+/// llama.cpp PR (#22836) — no prebuilt `llama-server` can load it — so the
+/// app ships the standard quantization instead.
+const MODEL_FILE: &str = "Hy-MT2-1.8B-Q4_K_M.gguf";
+const MODEL_SIZE: u64 = 1_133_080_448;
 const MODEL_URLS: [&str; 2] = [
-    "https://hf-mirror.com/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf",
-    "https://huggingface.co/tencent/Hy-MT2-1.8B-1.25Bit-GGUF/resolve/main/Hy-MT2-1.8B-1.25Bit.gguf",
+    "https://hf-mirror.com/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
+    "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/main/Hy-MT2-1.8B-Q4_K_M.gguf",
 ];
 
-/// The llama.cpp release this build pins. It must be recent enough to carry both
-/// the `hunyuan-dense` architecture and 1.25-bit quantization.
+/// The llama.cpp release this build pins. It must be recent enough to carry
+/// the `hunyuan-dense` architecture (with its `attn_k_norm`/`attn_q_norm`
+/// tensors) that Hy-MT2 uses.
 const LLAMA_CPP_TAG: &str = "b10936";
 
 /// The archive holding llama.cpp for this platform, and its expected size.
