@@ -22,6 +22,16 @@ tonemate 是一个常驻在菜单栏（Windows / Linux 上是系统托盘）里�
 
 第一行永远是最贴近字面、最中性的版本，后面的行语气渐远，方便你对比着选。
 
+## 界面预览
+
+| 输入条 | 多语气翻译结果 |
+| --- | --- |
+| ![输入条](assets/screenshots/1-input-bar.png) | ![多语气翻译结果](assets/screenshots/2-tones.png) |
+
+| 配色选择 | 翻译服务配置 |
+| --- | --- |
+| ![配色选择](assets/screenshots/3-accent.png) | ![翻译服务配置](assets/screenshots/4-provider.png) |
+
 ## 安装
 
 从 [Releases](https://github.com/shlouai/tonemate/releases) 下载最新版（当前 v0.1.0）：

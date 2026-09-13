@@ -22,6 +22,16 @@ The direction is detected automatically:
 
 The first line is always the most literal, most neutral rendering; later lines move further from it in tone, so you can compare and choose.
 
+## Screenshots
+
+| Input bar | Multi-tone results |
+| --- | --- |
+| ![Input bar](assets/screenshots/1-input-bar.png) | ![Multi-tone results](assets/screenshots/2-tones.png) |
+
+| Accent colours | Translation service |
+| --- | --- |
+| ![Accent colours](assets/screenshots/3-accent.png) | ![Translation service](assets/screenshots/4-provider.png) |
+
 ## Install
 
 Download the latest release (currently v0.1.0) from [Releases](https://github.com/shlouai/tonemate/releases):
