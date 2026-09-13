@@ -81,7 +81,7 @@ enum DownloadState {
     #[default]
     Idle,
     Downloading,
-    Error(String),
+    Error,
 }
 
 static DOWNLOAD_STATE: Mutex<DownloadState> = Mutex::new(DownloadState::Idle);
@@ -109,19 +109,12 @@ fn state_string(size_on_disk: u64, downloading: bool) -> String {
 pub fn model_state(app: &AppHandle) -> String {
     let is_error = {
         let guard = DOWNLOAD_STATE.lock().unwrap();
-        matches!(*guard, DownloadState::Error(_))
+        matches!(*guard, DownloadState::Error)
     };
     if is_error {
         "error".to_string()
     } else {
         state_string(model_size(app), is_downloading())
-    }
-}
-
-pub fn model_error() -> Option<String> {
-    match &*DOWNLOAD_STATE.lock().unwrap() {
-        DownloadState::Error(message) => Some(message.clone()),
-        _ => None,
     }
 }
 
@@ -237,7 +230,7 @@ pub async fn ensure_model_downloaded(app: &AppHandle) -> Result<(), String> {
 
     *DOWNLOAD_STATE.lock().unwrap() = match &result {
         Ok(()) => DownloadState::Idle,
-        Err(err) => DownloadState::Error(err.clone()),
+        Err(_) => DownloadState::Error,
     };
     match &result {
         Ok(()) => {
