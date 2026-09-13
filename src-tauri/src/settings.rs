@@ -81,6 +81,8 @@ pub struct ProviderConfig {
     pub deepseek_key_set: bool,
     pub qwen_key_set: bool,
     pub aws_profile: String,
+    pub local_model_state: String,
+    pub local_model_size: u64,
 }
 
 #[tauri::command]
@@ -92,6 +94,8 @@ pub fn provider_config(app: AppHandle) -> ProviderConfig {
         deepseek_key_set: !stored.deepseek_api_key.is_empty(),
         qwen_key_set: !stored.qwen_api_key.is_empty(),
         aws_profile: stored.aws_profile,
+        local_model_state: crate::provider::local::model_state(&app),
+        local_model_size: crate::provider::local::model_size(&app),
     }
 }
 
@@ -100,18 +104,29 @@ pub fn set_provider(app: AppHandle, provider: String) -> Result<(), String> {
     update(&app, |stored| stored.provider = provider.clone())?;
     println!("[tonemate] provider -> {provider}");
 
+    if provider == "local" {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(err) = crate::provider::local::ensure_model_downloaded(&handle).await {
+                eprintln!("[tonemate] model download failed: {err}");
+            }
+        });
+    }
+
     // Spawned rather than awaited so the settings window does not block on a
     // network round trip. A bad key or wrong host appears in the log at save time
     // rather than on the first translation, which is where the answer belongs
     // since this window shows no validation verdict.
-    let warm_handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let chosen = crate::provider::Provider::from_settings(&warm_handle);
-        match crate::provider::warm(&chosen).await {
-            Ok(()) => println!("[tonemate] {} warm", chosen.label()),
-            Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
-        }
-    });
+    if provider != "local" {
+        let warm_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let chosen = crate::provider::Provider::from_settings(&warm_handle);
+            match crate::provider::warm(&chosen).await {
+                Ok(()) => println!("[tonemate] {} warm", chosen.label()),
+                Err(err) => eprintln!("[tonemate] {} warmup failed: {err}", chosen.label()),
+            }
+        });
+    }
 
     Ok(())
 }
