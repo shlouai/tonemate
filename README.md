@@ -98,6 +98,23 @@ tonemate 默认使用 **AWS Bedrock**；你也可以在设置里切换成别的�
 
 选了 Kimi / DeepSeek / Qwen 但还没填 Key 时，会自动退回 Bedrock，并在日志里说明；如果填了 Key 但被服务拒绝，则会直接报错，而不是悄悄退回 Bedrock 继续给你计费。
 
+### 本地模型（离线翻译）
+
+在 设置 → 翻译服务 中选择「本地模型 (Hy-MT2)」即可离线翻译，文本不离开本机。
+首次选择会自动下载约 440 MB 的模型（通过 `hf-mirror.com` 镜像）；下载支持断点续传。
+翻译在本机通过 llama.cpp 运行，首次翻译时会自动准备运行时（约几秒）。
+
+默认仍是 AWS Bedrock；未选择本地模型时不会下载任何东西。
+
+可用环境变量：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `TONEMATE_LOCAL_MODEL_URL` | 内置镜像 URL | 覆盖模型下载地址 |
+| `TONEMATE_LLAMA_SERVER_URL` | llama.cpp b10936 发布地址 | 覆盖运行时下载地址（如走其它镜像） |
+| `TONEMATE_LOCAL_PORT` | `8931` | llama-server 端口 |
+| `TONEMATE_LOCAL_N_GPU_LAYERS` | `0` | GPU 卸载层数，0 = 仅 CPU |
+
 ---
 
 ## 进阶（开发者 / 深度配置）

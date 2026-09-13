@@ -98,6 +98,23 @@ tonemate uses **AWS Bedrock** by default; you can switch to another service in s
 
 Choosing Kimi / DeepSeek / Qwen without a saved key falls back to Bedrock and says so in the log; a key the service *rejects* is reported as an error instead of silently falling back — otherwise a revoked key would keep billing AWS.
 
+### Local model (offline translation)
+
+Pick **Local model (Hy-MT2)** in Settings → Translation service to translate offline, with your text never leaving this machine.
+Selecting it for the first time downloads the model automatically (~440 MB, via the `hf-mirror.com` mirror); the download is resumable.
+Translation runs locally through llama.cpp, which prepares its runtime on the first translation (a few seconds).
+
+The default is still AWS Bedrock; nothing is downloaded unless you select the local model.
+
+Available environment variables:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `TONEMATE_LOCAL_MODEL_URL` | built-in mirror URL | Override the model download URL |
+| `TONEMATE_LLAMA_SERVER_URL` | llama.cpp b10936 release URL | Override the runtime download URL (e.g. for another mirror) |
+| `TONEMATE_LOCAL_PORT` | `8931` | llama-server port |
+| `TONEMATE_LOCAL_N_GPU_LAYERS` | `0` | GPU offload layers; 0 = CPU only |
+
 ---
 
 ## Advanced (developers / deep configuration)
