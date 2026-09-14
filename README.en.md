@@ -34,14 +34,14 @@ The first line is always the most literal, most neutral rendering; later lines m
 
 ## Install
 
-Download the latest release (currently v0.2.1) from [Releases](https://github.com/shlouai/tonemate/releases):
+Download the latest release (currently v0.2.2) from [Releases](https://github.com/shlouai/tonemate/releases):
 
 | Platform | Package | Notes |
 | --- | --- | --- |
-| macOS | `tonemate_0.2.1_universal.dmg` | Open the DMG and drag tonemate into Applications |
-| macOS (no install) | `tonemate_0.2.1_universal.app.zip` | Unzip and run tonemate.app directly |
-| Windows | `tonemate_0.2.1_x64-setup.exe` | Run the installer, then launch from the Start menu / desktop |
-| Windows (portable) | `tonemate_0.2.1_x64_portable.zip` | Unzip and double-click tonemate.exe |
+| macOS | `tonemate_0.2.2_universal.dmg` | Open the DMG and drag tonemate into Applications |
+| macOS (no install) | `tonemate_0.2.2_universal.app.zip` | Unzip and run tonemate.app directly |
+| Windows | `tonemate_0.2.2_x64-setup.exe` | Run the installer, then launch from the Start menu / desktop |
+| Windows (portable) | `tonemate_0.2.2_x64_portable.zip` | Unzip and double-click tonemate.exe |
 
 The macOS build is a universal binary (Intel + Apple Silicon); the Windows build relies on the WebView2 runtime, which ships with Windows 10/11.
 

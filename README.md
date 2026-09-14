@@ -34,14 +34,14 @@ tonemate 是一个常驻在菜单栏（Windows / Linux 上是系统托盘）里�
 
 ## 安装
 
-从 [Releases](https://github.com/shlouai/tonemate/releases) 下载最新版（当前 v0.2.1）：
+从 [Releases](https://github.com/shlouai/tonemate/releases) 下载最新版（当前 v0.2.2）：
 
 | 平台 | 安装包 | 说明 |
 | --- | --- | --- |
-| macOS | `tonemate_0.2.1_universal.dmg` | 双击 DMG，把 tonemate 拖进「应用程序」 |
-| macOS（免安装） | `tonemate_0.2.1_universal.app.zip` | 解压后直接运行 tonemate.app |
-| Windows | `tonemate_0.2.1_x64-setup.exe` | 运行安装程序，装好后从开始菜单 / 桌面启动 |
-| Windows（绿色版） | `tonemate_0.2.1_x64_portable.zip` | 解压后双击 tonemate.exe 即用 |
+| macOS | `tonemate_0.2.2_universal.dmg` | 双击 DMG，把 tonemate 拖进「应用程序」 |
+| macOS（免安装） | `tonemate_0.2.2_universal.app.zip` | 解压后直接运行 tonemate.app |
+| Windows | `tonemate_0.2.2_x64-setup.exe` | 运行安装程序，装好后从开始菜单 / 桌面启动 |
+| Windows（绿色版） | `tonemate_0.2.2_x64_portable.zip` | 解压后双击 tonemate.exe 即用 |
 
 macOS 的 universal 包同时支持 Intel 和 Apple Silicon；Windows 版本依赖 WebView2 运行时（Win10/11 一般已随 Edge 预装）。
 
