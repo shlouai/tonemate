@@ -386,6 +386,10 @@ fn endpoint(port: u16) -> Endpoint {
         model: "local".to_string(),
         api_key: String::new(),
         max_tokens_field: "max_tokens",
+        // Sampling left at llama-server's default. A fixed low temperature made
+        // the model *deterministically* copy a hard word (精彩/不可抗力) into an
+        // otherwise-English answer; the default's variance, combined with the
+        // validate-and-retry in `local_translate`, lands clean more often.
         extra: serde_json::json!({}),
     }
 }

@@ -155,9 +155,10 @@ struct Scene {
     /// 商务正式/客服礼貌, so Chinese gets its own gloss too.
     zh_hint: &'static str,
     /// `label` is what the bar shows; `style` is the register the model is asked
-    /// for. The English wording is deliberate: asking for Chinese tone names
-    /// (直白/委婉/客气) came back nearly identical, while these English
-    /// descriptors — several of which hint at grammatical form — diverge.
+    /// for. The style is a Chinese description that hints at grammatical form
+    /// (口语化/书面语/敬语/用尽可能少的词) rather than a bare tone name, because
+    /// bare names (直白/委婉/客气) collapse into near-identical renderings, and
+    /// an English description triggered chat-style non-answers.
     tones: [(&'static str, &'static str); 3],
 }
 
@@ -170,9 +171,9 @@ const SCENES: [Scene; 5] = [
         en_hint: "colleagues, meetings, tasks",
         zh_hint: "同事、会议、任务",
         tones: [
-            ("直白", "blunt and direct, as a bare command"),
-            ("委婉", "soft and polite, like asking a favor"),
-            ("正式", "formal and courteous"),
+            ("直白", "直截了当，不加修饰"),
+            ("委婉", "委婉客气，用商量的口吻"),
+            ("正式", "正式得体，措辞规范"),
         ],
     },
     Scene {
@@ -181,9 +182,9 @@ const SCENES: [Scene; 5] = [
         en_hint: "casual chat with friends",
         zh_hint: "和朋友闲聊",
         tones: [
-            ("随口", "casual and friendly, like chatting with a friend"),
-            ("直白", "blunt and direct"),
-            ("客气", "polite and friendly, like asking a favor"),
+            ("随口", "随意口语化，用日常说法"),
+            ("直白", "直接了当"),
+            ("客气", "客气友好，礼貌周到"),
         ],
     },
     Scene {
@@ -192,9 +193,9 @@ const SCENES: [Scene; 5] = [
         en_hint: "specs, README, code, API docs",
         zh_hint: "规格、README、代码、API 文档",
         tones: [
-            ("简洁", "concise, in as few words as possible"),
-            ("正式", "formal and precise"),
-            ("易懂", "in plain everyday words"),
+            ("简洁", "简洁，用尽可能少的词"),
+            ("正式", "正式严谨，用词精确"),
+            ("易懂", "通俗易懂，用大白话"),
         ],
     },
     Scene {
@@ -203,9 +204,9 @@ const SCENES: [Scene; 5] = [
         en_hint: "contracts, payment terms, official letters",
         zh_hint: "合同、付款条款、正式信函",
         tones: [
-            ("正式", "formal and courteous"),
-            ("谦敬", "deferential and polite"),
-            ("直白", "direct and professional"),
+            ("正式", "正式礼貌，用书面语"),
+            ("谦敬", "恭敬谦逊，用敬语"),
+            ("直白", "直接专业，不拐弯"),
         ],
     },
     Scene {
@@ -214,9 +215,9 @@ const SCENES: [Scene; 5] = [
         en_hint: "apologies, complaints, support",
         zh_hint: "致歉、投诉、支持",
         tones: [
-            ("客气", "polite and friendly"),
-            ("歉意", "apologetic and sincere"),
-            ("正式", "formal and courteous"),
+            ("客气", "客气友好，礼貌周到"),
+            ("歉意", "诚恳道歉，表达歉意"),
+            ("正式", "正式得体，规范"),
         ],
     },
 ];
@@ -236,12 +237,24 @@ fn tones_for(reply: &str) -> Option<[(&'static str, &'static str); 3]> {
 /// The per-tone prompt for the local model. The register and the target ride in
 /// the user message — the one place a small model reliably attends to — rather
 /// than in a system prompt it may ignore.
+///
+/// The prompt is deliberately monolingual (Chinese), and the register is a
+/// Chinese description that hints at grammatical form rather than a bare tone
+/// name. An earlier English register ("casual and friendly, like chatting with
+/// a friend", "soft and polite, like asking a favor") read as an invitation to
+/// chat: the model answered as a conversation partner — sometimes in the source
+/// language — instead of translating. The single constraint mirrors the one the
+/// classification prompt already obeys, and is kept to one clause: piling on
+/// prohibitions ("不要重复原文、不要解释…") backfired, the model repeating the
+/// very words it was told to avoid.
 fn local_tone_prompt(text: &str, style: &str) -> String {
-    let target = match Direction::detect(text) {
-        Direction::FromChinese => "英文",
-        Direction::Other => "中文",
+    let (source, target) = match Direction::detect(text) {
+        Direction::FromChinese => ("中文", "英文"),
+        Direction::Other => ("英文", "中文"),
     };
-    format!("请把下面这句话翻译成{target}，语气要{style}：\n{text}")
+    format!(
+        "请把下面的{source}翻译成{target}，语气要{style}。只输出译文，译文必须全部用{target}，不要夹带{source}。\n\n{text}"
+    )
 }
 
 /// Four or five renderings of the same input, so roughly five times the budget
@@ -629,20 +642,278 @@ async fn local_translate(
 ) -> Result<(String, Option<String>), String> {
     let tones = classify_tones(endpoint, text).await;
     for (label, style) in tones {
-        let prompt = local_tone_prompt(text, style);
-        let mut labelled = false;
-        openai_compat::converse(endpoint, "", &prompt, MAX_TOKENS as u32, |fragment| {
-            if !labelled {
-                on_delta(&format!("{label}\t"));
-                labelled = true;
-            }
-            on_delta(fragment);
-        })
-        .await?;
+        // The label streams first so the row appears immediately; the text is
+        // buffered behind the retry below and lands once it is known clean.
+        on_delta(&format!("{label}\t"));
+        let translation = translate_tone(endpoint, text, style).await;
+        on_delta(&translation);
         on_delta("\n");
     }
-    // The rows are already streamed to `on_delta`; nothing is collected here.
     Ok((String::new(), None))
+}
+
+/// Whether a rendering is in the target language. For Chinese input the answer
+/// must carry no Han characters; for non-Chinese input it must carry some. This
+/// is the check that catches the "output the source language" failure, at the
+/// whole-word level the 0.5B model leaks at (精彩 → "so精彩").
+fn clean(rendering: &str, expect_english: bool) -> bool {
+    let has_han = rendering.chars().any(is_han);
+    if expect_english {
+        !has_han
+    } else {
+        has_han
+    }
+}
+
+/// Consecutive Han runs in a rendering — the words the model copied instead of
+/// translating. Naming them is what makes the retry work.
+fn leaked_han(s: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    for c in s.chars() {
+        if is_han(c) {
+            current.push(c);
+        } else if !current.is_empty() {
+            words.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
+}
+
+/// The retry prompt, restating the direction as a word-level command. `leaked`
+/// names the words the previous attempt copied instead of translating: the 0.5B
+/// model knows these words ("exciting", "portable charger") when asked directly,
+/// but leans on the source rather than retrieving them, and naming the word
+/// forces the retrieval.
+fn escalated_tone_prompt(text: &str, style: &str, leaked: &[String]) -> String {
+    let (source, target) = match Direction::detect(text) {
+        Direction::FromChinese => ("中文", "英文"),
+        Direction::Other => ("英文", "中文"),
+    };
+    let hint = if leaked.is_empty() {
+        String::new()
+    } else {
+        let words = leaked.join("、");
+        format!(" 上次的译文里「{words}」没有翻译，请把「{words}」也翻译成{target}。")
+    };
+    format!(
+        "把下面的{source}翻译成{target}。每个{source}词都要翻译成{target}，译文里不能出现任何{source}。语气要{style}。只输出{target}译文。{hint}\n\n{text}"
+    )
+}
+
+/// One tone's translation, re-rolled until it is clean. The 0.5B model is
+/// sampled (not greedy), so a re-roll of the same request can land clean where
+/// the first copied a word; the escalated prompt — which names the copied word —
+/// makes that likelier. Returns the first clean rendering, or the best (last
+/// non-empty) one if all rolls leak.
+async fn translate_tone(
+    endpoint: &openai_compat::Endpoint,
+    text: &str,
+    style: &str,
+) -> String {
+    let expect_english = Direction::detect(text) == Direction::FromChinese;
+    let mut prompt = local_tone_prompt(text, style);
+    let mut best = String::new();
+    let mut leaked: Vec<String> = Vec::new();
+
+    for _ in 0..3 {
+        let mut buffer = String::new();
+        let ok = openai_compat::converse(endpoint, "", &prompt, MAX_TOKENS as u32, |fragment| {
+            buffer.push_str(fragment);
+        })
+        .await
+        .is_ok();
+        if !ok {
+            prompt = escalated_tone_prompt(text, style, &leaked);
+            continue;
+        }
+        let trimmed = buffer.trim().to_string();
+        if trimmed.is_empty() {
+            prompt = escalated_tone_prompt(text, style, &leaked);
+            continue;
+        }
+        if best.is_empty() {
+            best = trimmed.clone();
+        }
+        if clean(&trimmed, expect_english) {
+            return trimmed;
+        }
+        if expect_english {
+            leaked = leaked_han(&trimmed);
+        }
+        prompt = escalated_tone_prompt(text, style, &leaked);
+    }
+    // Last resort: a re-translation can still copy a word or the whole sentence
+    // (精彩 in "太精彩了", or an English sentence echoed for a Chinese target).
+    // The model *does* know each word in isolation — "把「精彩」翻译成英文"
+    // answers "exciting" — so substitute each leaked word with its isolated
+    // translation rather than asking for the whole sentence a fourth time.
+    if !best.is_empty() && !clean(&best, expect_english) {
+        best = substitute_leaked(endpoint, &best, expect_english).await;
+    }
+    best
+}
+
+/// Asks the model for one word's English in isolation — the context in which it
+/// retrieves a word it otherwise copies from the source. Two stages: a direct
+/// translation ("把「精彩」翻译成英文" → "exciting") for the words the model
+/// knows but leans on, then — for words it genuinely lacks, like 不可抗力 — a
+/// paraphrase asked in English, which it answers "unavoidable event" instead of
+/// echoing the Han. Returns the leading English phrase, or `None` if neither
+/// stage yields any English.
+async fn translate_isolated_word(endpoint: &openai_compat::Endpoint, word: &str) -> Option<String> {
+    let direct = ask_english_word(
+        endpoint,
+        &format!("把「{word}」这个中文词翻译成英文，只输出英文单词。"),
+    )
+    .await;
+    if let Some(english) = direct {
+        return Some(english);
+    }
+    ask_english_word(
+        endpoint,
+        &format!("Translate 「{word}」 to English. Reply with only the English phrase, nothing else."),
+    )
+    .await
+}
+
+/// One isolated-word request, reduced to the leading English phrase in the reply.
+/// Re-sampled once on an unreadable answer: the model is sampled, so a re-roll of
+/// the same request lands clean where the first echoed the Han.
+async fn ask_english_word(endpoint: &openai_compat::Endpoint, prompt: &str) -> Option<String> {
+    for _ in 0..2 {
+        let mut buffer = String::new();
+        let ok = openai_compat::converse(endpoint, "", prompt, 32, |fragment| {
+            buffer.push_str(fragment);
+        })
+        .await
+        .is_ok();
+        if !ok {
+            continue;
+        }
+        if let Some(english) = leading_english(&buffer) {
+            return Some(english);
+        }
+    }
+    None
+}
+
+/// The leading run of English words in a model reply. A leading Han echo
+/// (「不可抗力」: Unresolvable) is skipped, and the run stops at the first
+/// punctuation after English begins, so a rambling preamble ("In English, …")
+/// truncates to harmless English rather than leaking Han.
+fn leading_english(s: &str) -> Option<String> {
+    let mut out = String::new();
+    for c in s.chars() {
+        if c.is_ascii_alphabetic() {
+            out.push(c);
+        } else if !out.is_empty() {
+            match c {
+                ' ' | '-' | '\'' => out.push(c),
+                _ => break,
+            }
+        }
+    }
+    let trimmed = out.trim().trim_matches('-').to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+/// The mirror of `translate_isolated_word` for the Chinese target: an English
+/// word the model copied rather than translating. Asked in Chinese, so the reply
+/// (「object」→ 对象) is already the right shape to read back.
+async fn translate_isolated_word_zh(endpoint: &openai_compat::Endpoint, word: &str) -> Option<String> {
+    ask_chinese_word(
+        endpoint,
+        &format!("把「{word}」这个英文词翻译成中文，只输出中文词。"),
+    )
+    .await
+}
+
+/// One English-to-Chinese isolated-word request, reduced to the leading Han run
+/// in the reply, re-sampled once when the model echoes the Latin word back.
+async fn ask_chinese_word(endpoint: &openai_compat::Endpoint, prompt: &str) -> Option<String> {
+    for _ in 0..2 {
+        let mut buffer = String::new();
+        let ok = openai_compat::converse(endpoint, "", prompt, 32, |fragment| {
+            buffer.push_str(fragment);
+        })
+        .await
+        .is_ok();
+        if !ok {
+            continue;
+        }
+        if let Some(zh) = leading_han(&buffer) {
+            return Some(zh);
+        }
+    }
+    None
+}
+
+/// The leading Han run in a model reply — the Chinese word the model produced,
+/// skipping any Latin gloss around it («object» means 对象 → 对象).
+fn leading_han(s: &str) -> Option<String> {
+    let mut out = String::new();
+    for c in s.chars() {
+        if is_han(c) {
+            out.push(c);
+        } else if !out.is_empty() {
+            break;
+        }
+    }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
+}
+
+/// Consecutive Latin-letter runs in a rendering — the English words the model
+/// copied instead of translating into Chinese.
+fn leaked_latin(s: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    for c in s.chars() {
+        if c.is_ascii_alphabetic() {
+            current.push(c);
+        } else if !current.is_empty() {
+            words.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    words
+}
+
+/// Replaces each leaked word — Han for an English target, Latin for a Chinese
+/// target — with its isolated translation into the target language.
+async fn substitute_leaked(
+    endpoint: &openai_compat::Endpoint,
+    best: &str,
+    expect_english: bool,
+) -> String {
+    let mut result = best.to_string();
+    if expect_english {
+        for word in leaked_han(best) {
+            if let Some(english) = translate_isolated_word(endpoint, &word).await {
+                result = result.replace(&word, &english);
+            }
+        }
+    } else {
+        for word in leaked_latin(best) {
+            if let Some(zh) = translate_isolated_word_zh(endpoint, &word).await {
+                result = result.replace(&word, &zh);
+            }
+        }
+    }
+    result
 }
 
 #[cfg(test)]
@@ -809,22 +1080,107 @@ mod tests {
     }
 
     /// The local model is not steered reliably by a system prompt, so the
-    /// register and target ride in the user message. The English descriptor must
-    /// be there — it's what makes the tones actually diverge — alongside the
-    /// source text.
+    /// register and target ride in the user message. The Chinese register
+    /// description must be there — it's what makes the tones actually diverge —
+    /// alongside the source text.
     #[test]
     fn the_local_tone_prompt_embeds_target_style_and_text() {
-        let prompt = local_tone_prompt("我明天不能来了", "blunt and direct");
+        let prompt = local_tone_prompt("我明天不能来了", "直截了当，不加修饰");
         assert!(prompt.contains("翻译成英文"), "Chinese in → English out: {prompt}");
-        assert!(prompt.contains("blunt and direct"), "the register goes in the user message: {prompt}");
+        assert!(prompt.contains("直截了当，不加修饰"), "the register goes in the user message: {prompt}");
         assert!(prompt.ends_with("我明天不能来了"), "the source text follows: {prompt}");
     }
 
     #[test]
     fn the_local_tone_prompt_targets_chinese_for_non_chinese_input() {
-        let prompt = local_tone_prompt("Could you review this by Friday?", "soft and polite");
+        let prompt = local_tone_prompt("Could you review this by Friday?", "委婉客气，用商量的口吻");
         assert!(prompt.contains("翻译成中文"), "non-Chinese in → Chinese out: {prompt}");
-        assert!(prompt.contains("soft and polite"));
+        assert!(prompt.contains("委婉客气，用商量的口吻"));
+    }
+
+    /// The whole-word leak the retry exists for: one untranslated Chinese word
+    /// inside an otherwise-English answer must read as dirty, and a full echo
+    /// as dirty too.
+    #[test]
+    fn clean_rejects_source_language_at_any_level() {
+        assert!(clean("I can't come tomorrow.", true));
+        assert!(!clean("It was so精彩.", true));
+        assert!(!clean("提交这段代码到主分支。", true));
+        assert!(clean("我明天不能来了。", false));
+        assert!(!clean("I can't come tomorrow.", false));
+    }
+
+    /// The escalation restates the direction as a word-level command, and names
+    /// the word a previous attempt copied.
+    #[test]
+    fn the_escalated_prompt_commands_word_level_translation() {
+        let prompt = escalated_tone_prompt("今天太精彩了。", "直截了当", &[]);
+        assert!(prompt.contains("每个中文词都要翻译成英文"));
+        assert!(prompt.contains("不能出现任何中文"));
+        assert!(prompt.ends_with("今天太精彩了。"));
+
+        let leaked = vec!["精彩".to_string()];
+        let targeted = escalated_tone_prompt("今天太精彩了。", "直截了当", &leaked);
+        assert!(targeted.contains("「精彩」也翻译成英文"), "{targeted}");
+    }
+
+    /// The Han runs the retry names are the words left untranslated.
+    #[test]
+    fn leaked_han_collects_the_copied_words() {
+        assert_eq!(leaked_han("It was so精彩。"), vec!["精彩".to_string()]);
+        assert_eq!(
+            leaked_han("charging宝 and 不可抗力"),
+            vec!["宝".to_string(), "不可抗力".to_string()]
+        );
+        assert_eq!(leaked_han("no han here"), Vec::<String>::new());
+    }
+
+    /// The isolated-word reply is reduced to the leading English phrase: a Han
+    /// echo before the answer is skipped, and a trailing explanation or preamble
+    /// is cut so the substituted word stays a bare English run.
+    #[test]
+    fn leading_english_skips_han_echo_and_preamble() {
+        assert_eq!(leading_english("exciting"), Some("exciting".to_string()));
+        assert_eq!(leading_english("power bank"), Some("power bank".to_string()));
+        assert_eq!(
+            leading_english("不可抗力 - Unresolvable"),
+            Some("Unresolvable".to_string())
+        );
+        assert_eq!(
+            leading_english("Unpredictable force."),
+            Some("Unpredictable force".to_string())
+        );
+        // A full echo with no Latin letters yields nothing.
+        assert_eq!(leading_english("不可抗力（不可抗力）"), None);
+        assert_eq!(leading_english(""), None);
+    }
+
+    /// The mirror of `leading_english` for the Chinese target: the first Han run
+    /// is the word, with any Latin gloss around it skipped.
+    #[test]
+    fn leading_han_skips_a_latin_gloss() {
+        assert_eq!(leading_han("对象"), Some("对象".to_string()));
+        assert_eq!(leading_han("object means 对象"), Some("对象".to_string()));
+        assert_eq!(leading_han("object"), None);
+        assert_eq!(leading_han(""), None);
+    }
+
+    /// The Latin runs in an echoed English sentence are the words to translate.
+    #[test]
+    fn leaked_latin_collects_the_copied_words() {
+        assert_eq!(
+            leaked_latin("This API returns a JSON object."),
+            vec![
+                "This".to_string(),
+                "API".to_string(),
+                "returns".to_string(),
+                "a".to_string(),
+                "JSON".to_string(),
+                "object".to_string()
+            ]
+        );
+        assert_eq!(leaked_latin("no han here"), vec!["no", "han", "here"]);
+        assert_eq!(leaked_latin("纯中文没有英文"), Vec::<String>::new());
     }
 
     /// A scene name the model returns must map back to the tones defined for it;

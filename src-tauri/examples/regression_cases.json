@@ -1,0 +1,15 @@
+[
+  { "text": "我们下午三点开会，不要迟到。", "scene": "职场交流" },
+  { "text": "我昨天熬夜了，现在好困。", "scene": "日常对话" },
+  { "text": "你昨天看那场比赛了吗？太精彩了。", "scene": "日常对话" },
+  { "text": "我手机快没电了，借你的充电宝用一下。", "scene": "日常对话" },
+  { "text": "这电影一点都不好看，白花钱了。", "scene": "日常对话" },
+  { "text": "配置文件位于项目根目录下。", "scene": "技术文档" },
+  { "text": "请把这段代码提交到主分支。", "scene": "技术文档" },
+  { "text": "因不可抗力导致延误的，双方互不承担责任。", "scene": "商务正式" },
+  { "text": "您的问题已记录，我们会尽快解决。", "scene": "客服礼貌" },
+  { "text": "为表歉意，我们为您准备了补偿方案。", "scene": "客服礼貌" },
+  { "text": "把 log 发我看看。", "scene": "混合英文" },
+  { "text": "This API returns a JSON object.", "scene": "technical" },
+  { "text": "We apologize for the inconvenience and will handle it promptly.", "scene": "customer service" }
+]
